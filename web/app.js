@@ -917,7 +917,7 @@ function konverzace(z) {
       const jeCitace = !interni && orez !== String(m.telo).replace(/\n{3,}/g, '\n\n').trimEnd();
       const bg = interni ? 'var(--red-100)' : nase ? 'var(--teal-100)' : 'var(--panel)';
       const fg = interni ? 'var(--red)' : nase ? 'var(--teal-700)' : 'var(--ink)';
-      const autoAdresa = m.typ === 'prichozi' && m.parovani === 'přiřazeno automaticky podle adresy';
+      const lzeOdpojit = m.typ === 'prichozi' && muzeMenit();
 
       return h('div', { style: 'align-self:' + (nase ? 'flex-end' : interni ? 'stretch' : 'flex-start')
           + ';max-width:' + (interni ? '100%' : '80%') + ';min-width:0' },
@@ -933,13 +933,14 @@ function konverzace(z) {
             style: 'padding:1px 4px;font-size:12px;margin-top:3px;border:0',
             onclick: () => { S.citaceZpravy = Object.assign({}, S.citaceZpravy, { [m.id]: !plny }); vykresli(); } },
             plny ? '▴ skrýt citovaný e-mail' : '▾ zobrazit celý e-mail'),
-          autoAdresa && muzeMenit() && h('div', { style: 'margin-top:4px' },
+          lzeOdpojit && h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2);margin-top:4px;font-size:12px;color:var(--muted)' },
+            h('span', {}, 'spárováno: ' + (m.parovani || 'ručně')),
             h('button', { class: 'btn btn-ghost', style: 'padding:1px 4px;font-size:12px;border:0;color:var(--teal-700)',
               onclick: async () => {
-                if (!confirm('Odpojit tuto zprávu a vrátit ji do Nezařazeno? (spárováno jen podle e-mailové adresy)')) return;
+                if (!confirm('Odpojit tuto zprávu od zakázky ' + z.cislo + ' a vrátit ji do Nezařazeno?')) return;
                 try { await api('zprava-odpoj', { cislo: z.cislo, zprava: m.id }); await obnov(); }
                 catch (e) { hlas(e); }
-              } }, 'Spárováno podle adresy — odpojit'))));
+              } }, 'odpojit → Nezařazeno'))));
     }));
 }
 
