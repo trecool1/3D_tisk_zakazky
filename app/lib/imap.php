@@ -97,15 +97,24 @@ function nactiPostu(): array {
   $mbox = imapPripoj();
   if (!$mbox) { $stat['chyba'] = 'IMAP: ' . (imap_last_error() ?: 'nenastaveno'); return $stat; }
 
-  $uid = imap_search($mbox, 'UNSEEN', SE_UID) ?: [];
+  // Bereme poštu za posledních 14 dní a rozlišujeme ji podle Message-ID (tabulka
+  // videne_maily), NE podle příznaku přečteno — takže když si zprávu někdo mezitím
+  // otevře ve svém mailu (a nastaví \Seen), kanban ji stejně zpracuje.
+  $od  = date('j-M-Y', time() - 14 * 86400);
+  $uid = imap_search($mbox, 'SINCE "' . $od . '"', SE_UID) ?: [];
+  db()->exec('DELETE FROM videne_maily WHERE kdy < datetime("now", "-40 days")');
+
   foreach ($uid as $u) {
+    // klíč pro dedup: Message-ID, u zpráv bez něj stabilní UID schránky
+    $mid   = imapMessageId($mbox, (int)$u);
+    $viden = $mid !== '' ? $mid : 'uid:' . $u;
+    $q = db()->prepare('SELECT 1 FROM videne_maily WHERE message_id = ?');
+    $q->execute([$viden]);
+    if ($q->fetchColumn()) continue;   // už jsme ji zpracovali
+
     $m = imapZprava($mbox, (int)$u);
     $stat['nactenych']++;
-
-    $q = db()->prepare('SELECT 1 FROM videne_maily WHERE message_id = ?');
-    $q->execute([$m['message_id']]);
-    if ($q->fetchColumn()) { imap_setflag_full($mbox, (string)$u, '\\Seen', ST_UID); continue; }
-    db()->prepare('INSERT OR IGNORE INTO videne_maily (message_id) VALUES (?)')->execute([$m['message_id']]);
+    db()->prepare('INSERT OR IGNORE INTO videne_maily (message_id) VALUES (?)')->execute([$viden]);
 
     [$z, $parovani, $duvod] = sparujZpravu($m);
 
@@ -178,6 +187,12 @@ function ulozPrichozi(array $z, array $m, string $parovani): void {
 }
 
 /* ---------- čtení jedné zprávy ---------- */
+
+// Levné vytažení Message-ID (jen hlavička), ať se plný fetch dělá jen u nových zpráv.
+function imapMessageId($mbox, int $uid): string {
+  $h = (string)imap_fetchheader($mbox, $uid, FT_UID);
+  return preg_match('/^message-id:\s*(.+)$/im', $h, $m) ? trim($m[1], " <>\r\n\t") : '';
+}
 
 function imapZprava($mbox, int $uid): array {
   $hlavickyRaw = imap_fetchheader($mbox, $uid, FT_UID);
