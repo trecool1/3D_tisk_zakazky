@@ -1333,7 +1333,8 @@ function vykresli() {
       view = muzeMenit() ? 'board' : 'list';
       S.view = view;
     }
-    obsah = h('div', { class: 'app' },
+    // na tabuli držíme výšku okna, ať se karty rolují uvnitř sloupce (ne celá stránka)
+    obsah = h('div', { class: 'app' + (view === 'board' ? ' tabule-rezim' : '') },
       hlavicka(),
       S.chyba && h('div', { class: 'chyba-pruh' }, S.chyba),
       (podle[view] || obrazovkaTabule)(),
