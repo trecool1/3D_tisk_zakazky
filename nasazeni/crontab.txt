@@ -30,4 +30,4 @@
 # Nezařazeno. Schránka pokusss74@seznam.cz je sdílená s upozorněními z kalkulátoru:
 # ta jdou podle hlavičky X-Poptavka-Cislo potichu pryč, cron ale VŠECHNU poštu
 # ve schránce označuje jako přečtenou. Ideálně samostatná schránka jen pro zakázky.
-*/5 * * * *  php /var/www/kanban-app/cron/posta.php             >> /var/www/kanban-data/cron.log 2>&1
+*/1 * * * *  php /var/www/kanban-app/cron/posta.php             >> /var/www/kanban-data/cron.log 2>&1

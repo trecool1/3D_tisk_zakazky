@@ -41,7 +41,9 @@ return [
   ],
 
   // --- veřejná stavová stránka ---
-  'verejnaUrl' => 'https://cadmia3d.cz/stav',   // + /<token>
+  // ?t= podoba funguje s libovolným nginx; hezká adresa …/stav/<token>
+  // vyžaduje location ~ ^/stav/ z nasazeni/kanban.conf.
+  'verejnaUrl' => 'https://zakazky.cadmia.net/stav.php?t=',
 
   // --- provoz ---
   'sezeniDnu'  => 30,

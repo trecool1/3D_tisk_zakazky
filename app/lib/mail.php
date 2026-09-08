@@ -151,7 +151,10 @@ function sablonaVypln(array $t, array $z): array {
 }
 
 function stavovaUrl(array $z): string {
-  return rtrim((string)cfg('verejnaUrl', ''), '/') . '/' . (string)$z['token'];
+  $base = (string)cfg('verejnaUrl', '');
+  $tok  = (string)$z['token'];
+  // dvě podoby: query (…/stav.php?t=) nebo hezká adresa (…/stav/<token>)
+  return (str_contains($base, '?') || str_ends_with($base, '=')) ? $base . $tok : rtrim($base, '/') . '/' . $tok;
 }
 
 /** Upozornění dílně — souhrn, ne zpráva za každou drobnost. */
