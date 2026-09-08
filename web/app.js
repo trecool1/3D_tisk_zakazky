@@ -135,7 +135,8 @@ function nazevSloupce(k) { const s = S.sloupce.find(x => x.klic === k); return s
 function projde(z) {
   const q = S.hledani.trim().toLowerCase();
   if (q) {
-    const hay = [z.cislo, z.zakaznik, z.zakJmeno, z.zakEmail, z.material, z.tech].join(' ').toLowerCase();
+    const hay = [z.cislo, z.zakaznik, z.zakJmeno, z.zakEmail, z.material, z.tech, z.souboryText || '']
+      .join(' ').toLowerCase();
     if (!hay.includes(q)) return false;
   }
   if (S.fKdo && (z.prirazeno || '') !== (S.fKdo === 'nikdo' ? '' : S.fKdo)) return false;

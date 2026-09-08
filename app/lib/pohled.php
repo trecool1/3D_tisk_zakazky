@@ -13,6 +13,7 @@ function zakazkaProSeznam(array $z): array {
   $pol   = polozky((int)$z['id']);
   $konf  = jsonDek($z['konfigurace'], []);
   $ks    = array_sum(array_map(fn($p) => (int)$p['pocet'], $pol));
+  $soub  = souboryZakazky((int)$z['id']);
 
   return [
     'cislo'        => $z['cislo'],
@@ -38,7 +39,9 @@ function zakazkaProSeznam(array $z): array {
     'cekaDnu'      => $ceka,
     'zdroj'        => $z['zdroj'],
     'nahledMm'     => $pol ? max(jsonDek($pol[0]['bbox'], [0,0,0])) : 0,
-    'maSoubory'    => count(souboryZakazky((int)$z['id'])) > 0,
+    'maSoubory'    => count($soub) > 0,
+    'souboryText'  => implode(' ', array_map(fn($f) => (string)$f['nazev'], $soub))
+                      . ' ' . implode(' ', array_map(fn($p) => (string)$p['nazev'], $pol)),
     'koop'         => array_map(fn($o) => [
                         'co' => $o['co'], 'partner' => $o['partner'], 'stav' => $o['stav'],
                         'stavLabel' => KOOP_KROKY[koopKrokIndex($o['stav'])]['label'],
