@@ -39,11 +39,31 @@ historie) jako JSON v TEXT sloupcích. Schéma se aktualizuje spuštěním `inst
 **Napojení na kalkulátor:** `pricing.json` je vlastnictví kalkulátoru, kanban ho jen
 čte (dopočet ceny při ruční úpravě, příznak interní/externí výroba). Poptávky chodí
 dvěma cestami — obě fungují:
-1. **push:** kalkulátor POSTuje na `order.php` (až se v `pricing.json` přepne
-   `orderEndpoint`), hlavička `X-Kanban-Secret`.
+1. **push:** kalkulátor POSTuje na `order.php` (až se v `order.php` kalkulátoru vyplní
+   `$WEBHOOK` + `$WEBHOOK_TOKEN`), hlavička `X-Kanban-Secret`.
 2. **pull:** `cron/import-kalkulator.php` přenese poptávky, které kalkulátor uložil
    do `poptavky/objednavky.json`. Podle čísla se nic nezdvojí, takže obě cesty
    můžou běžet souběžně během přechodu.
+
+### Režim provozu — e-mail vs. kanban
+
+**E-mail je vždycky primární a nezávislý na kanbanu.** Kalkulátor (`order.php`)
+posílá KAŽDOU poptávku na `pokusss74@seznam.cz` (text + PDF nabídka + JSON příloha
++ modely). Když kanban vypneš nebo spadne, o žádnou poptávku nepřijdeš — chodí na
+mail jako doteď.
+
+Kanban k tomu jede navíc v režimu **pull**: cron `import-kalkulator.php --bez-mailu`
+každých 10 min čte `objednavky.json` a zakládá karty. `--bez-mailu` je tam schválně,
+aby kanban neposílal svoje vlastní potvrzení a upozornění dílně (jinak by chodila
+dvakrát — jednou z kalkulátoru, podruhé z kanbanu).
+
+- **Vypnout kanban** (zpět na čistě e-mailový provoz): `crontab -e` a zakomentovat
+  řádek `import-kalkulator.php`. Hotové karty zůstanou, nové poptávky přestanou
+  přibývat, e-maily chodí dál.
+- **Zapnout zpět:** řádek odkomentovat. `objednavky.json` drží posledních 5000
+  poptávek, takže se doimportuje i to, co mezitím přišlo.
+- **Nepřepínat na push** ($WEBHOOK v `order.php` kalkulátoru nechat prázdný) — jen
+  tak zůstává e-mail plnohodnotnou zálohou.
 
 ## Stav (k dokončení projektu)
 
@@ -91,16 +111,18 @@ sudo bash ~/kanban-stage/nasazeni/go-live.sh
    Po úpravě `sudo systemctl reload php8.3-fpm` není nutný (config se čte za běhu),
    ale `cron/posta.php` si vyzkoušej ručně: `php /var/www/kanban-app/cron/posta.php`.
 
-5. **cron** — `crontab -e` (jako `cadmia`), vložit obsah `nasazeni/crontab.txt`.
-   Poslední řádek (`import-kalkulator.php`) běží jen dokud kalkulátor posílá „pull"
-   cestou; po kroku 6 ho zakomentuj.
+5. **cron** (jako `cadmia`) — `crontab ~/kanban-stage/nasazeni/crontab.txt`
+   (nahradí celý crontab; `crontab -l` na kontrolu). Nasazuje: pull import každých
+   10 min (`--bez-mailu`), ranní přehled, noční zálohu. `posta.php` (IMAP) je
+   **zakomentovaný** — zapnout až bude samostatná schránka jen pro zakázky, jinak
+   cron čte a označuje jako přečtené i upozornění z kalkulátoru na téže adrese.
 
-6. **Přepnout kalkulátor na push** — v `/var/www/kalkulator/pricing.json`:
-   `"orderEndpoint"` na URL `order.php` kanbanu a do konfigurace kalkulátoru přidat
-   shared secret — **stejnou hodnotu jako `orderSecret` v `/var/www/kanban-app/config.php`**
-   (posílá se v hlavičce `X-Kanban-Secret`). Pro ostrý provoz secret přegeneruj:
-   `php -r 'echo bin2hex(random_bytes(24))."\n";'` a nastav ho na obou stranách.
-   Otestovat jednou poptávkou, pak vypnout cron import.
+6. **Push (volitelně, NEDOPORUČENO ve výchozím stavu)** — kalkulátor by POSToval
+   rovnou na `order.php` kanbanu místo pullu. V `/var/www/kalkulator/order.php`
+   nastavit `$WEBHOOK` na URL `order.php` kanbanu a `$WEBHOOK_TOKEN` na **stejnou
+   hodnotu jako `orderSecret` v `/var/www/kanban-app/config.php`** (jde v hlavičce
+   `X-Kanban-Secret`). Pak vypnout cron import. **Zůstat u pullu** znamená, že
+   e-mailová cesta funguje jako záloha — viz „Režim provozu" výše.
 
 7. **Změnit heslo admina** (`admin` / `cadmia`) a založit účty dílny
    (Nastavení → Uživatelé).

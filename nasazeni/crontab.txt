@@ -1,10 +1,24 @@
 # Kanban zakázek Cadmia3D — cron pro uživatele cadmia
-#   crontab -e     (vložit řádky níže)
+#   crontab ~/kanban-stage/nasazeni/crontab.txt      (nahradí celý crontab)
+#   nebo: crontab -e  a vložit řádky níže
 # Běží jako cadmia, protože PHP-FPM pool kanbanu jede taky jako cadmia —
 # všichni zapisovatelé do kanban.sqlite jsou pak stejný uživatel.
+#
+# ── REŽIM PROVOZU ────────────────────────────────────────────────────────────
+# E-mail je vždy primární: kalkulátor (order.php) posílá KAŽDOU poptávku na
+# pokusss74@seznam.cz (text + PDF nabídka + JSON + modely). Funguje to bez
+# ohledu na kanban — když kanban vypneš, o žádnou poptávku nepřijdeš.
+#
+# Kanban jede vedle toho v režimu PULL: čte poptavky/objednavky.json kalkulátoru
+# a zakládá karty. Vypnout kanban = zakomentovat řádek import-kalkulator.php.
+# `--bez-mailu` = kanban při importu NEROZESÍLÁ vlastní potvrzení/upozornění,
+# aby nechodily dvakrát (jednou z kalkulátoru, podruhé z kanbanu).
+# Kalkulátor na PUSH nepřepínat ($WEBHOOK v order.php nechat prázdný), ať
+# e-mailová cesta zůstane jako záloha.
+# ────────────────────────────────────────────────────────────────────────────
 
-# příchozí pošta z IMAP — párování odpovědí, nové karty, Nezařazeno
-*/5 * * * *  php /var/www/kanban-app/cron/posta.php             >> /var/www/kanban-data/cron.log 2>&1
+# PULL poptávek z poptavky/objednavky.json kalkulátoru (tiše, bez e-mailů z kanbanu)
+*/10 * * * * php /var/www/kanban-app/cron/import-kalkulator.php --bez-mailu >> /var/www/kanban-data/cron.log 2>&1
 
 # ranní přehled dílně: co tisknout, co expedovat, po termínu, neodpovězené nabídky
 10 7 * * *   php /var/www/kanban-app/cron/denni.php             >> /var/www/kanban-data/cron.log 2>&1
@@ -12,6 +26,8 @@
 # noční záloha DB (VACUUM INTO) + tar modelů, drží se 14 dní
 30 2 * * *   php /var/www/kanban-app/cron/zaloha.php            >> /var/www/kanban-data/cron.log 2>&1
 
-# PŘECHODNĚ: pull poptávek z poptavky/objednavky.json kalkulátoru.
-# Vypnout, jakmile je v pricing.json orderEndpoint přepnutý na order.php kanbanu.
-*/10 * * * * php /var/www/kanban-app/cron/import-kalkulator.php >> /var/www/kanban-data/cron.log 2>&1
+# příchozí pošta z IMAP — párování odpovědí zákazníků, nové karty, Nezařazeno.
+# ZATÍM VYPNUTO: schránka pokusss74@seznam.cz je sdílená s upozorněními
+# z kalkulátoru; cron by je četl a označoval jako přečtené. Zapnout až bude
+# samostatná schránka jen pro zakázky (viz NASAZENI.md krok 4).
+#*/5 * * * *  php /var/www/kanban-app/cron/posta.php             >> /var/www/kanban-data/cron.log 2>&1
