@@ -451,7 +451,9 @@ function karta(z) {
       h('div', { class: 'radek1' },
         h('span', { class: 'cislo' }, z.cislo),
         z.neprectene && h('span', { class: 'tecka' }),
-        z.prioritaRucne && h('span', { class: 'rucne', title: 'Priorita nastavena ručně' }, '✱ ručně'),
+        z.prioritaRucne && h('span', { class: 'rucne',
+          title: 'Pořadí / priorita nastavené ručně — přetažením karty nebo v detailu. Zrušíš tak, že v detailu vrátíš Prioritu na „automaticky".' },
+          '✱ ručně'),
         h('span', { class: 'prio', style: 'color:' + p.fg }, p.label)),
 
       h('div', { class: 'radek2' },
@@ -478,11 +480,25 @@ function karta(z) {
 
 /* ---------- akce nad kartou ---------- */
 
+// Přesun i změna pořadí se nejdřív promítnou lokálně (ať karta zůstane, kam ji
+// pustíš), pak se pošlou na server a obnov() si vyžádá směrodatný stav.
 async function presun(cislo, stav) {
-  try { await api('presun', { cislo, stav }); await obnov(); } catch (e) { hlas(e); }
+  const z = S.zakazky.find(x => x.cislo === cislo);
+  if (z && z.stav !== stav) { z.stav = stav; prekresliTabuli(); }
+  try { await api('presun', { cislo, stav }); } catch (e) { hlas(e); }
+  await obnov();
 }
 async function zmenPoradi(cislo, nad) {
-  try { await api('poradi', { cislo, nad }); await obnov(); } catch (e) { hlas(e); }
+  const z   = S.zakazky.find(x => x.cislo === cislo);
+  const cil = S.zakazky.find(x => x.cislo === nad);
+  if (z && cil) {
+    z.prioritaRucne = true;
+    z.priorita = cil.priorita;
+    z.poradi = (cil.poradi || 0) - 1;
+    prekresliTabuli();
+  }
+  try { await api('poradi', { cislo, nad }); } catch (e) { hlas(e); }
+  await obnov();
 }
 async function otevri(cislo) {
   try {
