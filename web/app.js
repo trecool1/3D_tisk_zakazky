@@ -76,7 +76,7 @@ const S = {
   fStav: '', razeni: 'termin',
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
   smazPriloha: null, dropAktivni: false,
-  firmy: [], firmaKlic: null, posta: [], postaFiltr: 'vse', nezarazeno: null,
+  firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
   nastaveniData: null, pubCislo: null, kopirovano: false,
   chyba: '', nacitam: false,
 };
@@ -982,12 +982,18 @@ function obrazovkaSeznam() {
     ['cena', 'Cena s DPH', 'right'], ['kdo', 'Kdo', 'left']];
 
   return h('div', { class: 'obrazovka' },
-    h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-4);margin-bottom:var(--space-3)' },
+    h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-3) var(--space-4);margin-bottom:var(--space-3)' },
       h('h3', { style: 'margin:0' }, 'Seznam zakázek'),
+      h('input', { id: 'hledaniSeznam', class: 'input', value: S.hledani,
+        placeholder: 'Hledat číslo, zákazníka, e-mail, soubor…',
+        style: 'width:290px;max-width:100%;padding:6px 10px',
+        oninput: e => { S.hledani = e.target.value; vykresli(); } }),
       h('select', { class: 'input', style: 'width:auto;padding:5px 8px',
           onchange: e => { S.fStav = e.target.value; vykresli(); } },
         [h('option', { value: '', selected: !S.fStav }, 'Všechny stavy'),
          ...S.sloupce.map(c => h('option', { value: c.klic, selected: c.klic === S.fStav }, c.nazev))]),
+      S.hledani && h('button', { class: 'btn btn-secondary', style: 'padding:3px 10px',
+        onclick: () => { S.hledani = ''; vykresli(); } }, 'Zrušit hledání'),
       h('span', { style: 'font-size:15px;color:var(--muted)' }, zakazek(list.length)),
       h('span', { style: 'margin-left:auto;font-size:13px;color:var(--muted)' }, 'Celkem s DPH ' + kc(suma)),
       h('a', { class: 'btn btn-ghost', style: 'text-decoration:none;border:0',
@@ -1012,17 +1018,29 @@ function obrazovkaSeznam() {
 /* ---------- Zákazníci ---------- */
 
 function obrazovkaZakaznici() {
-  const f = S.firmy.find(x => x.klic === S.firmaKlic) || S.firmy[0];
+  const q = (S.hledaniFirmy || '').trim().toLowerCase();
+  const firmy = !q ? S.firmy : S.firmy.filter(x => [
+      x.nazev, x.ico,
+      ...x.kontakty.map(k => (k.jmeno || '') + ' ' + (k.email || '')),
+      ...x.zakazky.map(z => z.cislo),
+    ].join(' ').toLowerCase().includes(q));
+  const f = firmy.find(x => x.klic === S.firmaKlic) || firmy[0];
   return h('div', { class: 'obrazovka',
       style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:var(--space-6);align-items:start' },
     h('section', { style: 'min-width:0' },
-      h('h3', { style: 'margin:0 0 var(--space-3)' }, 'Zákazníci (firmy)'),
+      h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-3);margin-bottom:var(--space-3)' },
+        h('h3', { style: 'margin:0' }, 'Zákazníci (firmy)'),
+        h('input', { id: 'hledaniFirmy', class: 'input', value: S.hledaniFirmy || '',
+          placeholder: 'Hledat firmu, IČO, kontakt, číslo…',
+          style: 'flex:1;min-width:200px;max-width:320px;padding:6px 10px',
+          oninput: e => { S.hledaniFirmy = e.target.value; vykresli(); } }),
+        h('span', { style: 'font-size:14px;color:var(--muted)' }, firmy.length + ' / ' + S.firmy.length)),
       h('div', { class: 'scroll-x' },
         h('table', { class: 'table', style: 'width:100%;min-width:460px' },
           h('thead', {}, h('tr', {}, h('th', {}, 'Firma'), h('th', {}, 'IČO'),
             h('th', { style: 'text-align:right' }, 'Kontakty'), h('th', { style: 'text-align:right' }, 'Zakázky'),
             h('th', { style: 'text-align:right' }, 'Obrat'), h('th', { style: 'text-align:right' }, 'Sleva'))),
-          h('tbody', {}, S.firmy.map(x => h('tr', {
+          h('tbody', {}, firmy.map(x => h('tr', {
               style: 'cursor:pointer;background:' + (f && x.klic === f.klic ? 'var(--teal-100)' : 'transparent'),
               onclick: () => { S.firmaKlic = x.klic; vykresli(); } },
             h('td', { style: 'font-weight:600;color:var(--teal)' }, x.nazev),
@@ -1031,7 +1049,8 @@ function obrazovkaZakaznici() {
             h('td', { style: 'text-align:right' }, String(x.zakazek)),
             h('td', { style: 'text-align:right;white-space:nowrap' }, kc(x.obrat)),
             h('td', { style: 'text-align:right' }, x.sleva ? x.sleva + ' %' : '—')))))),
-      S.firmy.length === 0 && h('div', { style: 'color:var(--muted)' }, 'Zatím žádní zákazníci.')),
+      S.firmy.length === 0 && h('div', { style: 'color:var(--muted)' }, 'Zatím žádní zákazníci.'),
+      S.firmy.length > 0 && firmy.length === 0 && h('div', { style: 'color:var(--muted)' }, 'Nic neodpovídá hledání.')),
 
     f && h('section', { class: 'panel', style: 'min-width:0;padding:var(--space-4)' },
       h('h3', { style: 'margin:0 0 var(--space-1)' }, f.nazev),
