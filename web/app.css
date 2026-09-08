@@ -137,7 +137,9 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
 .sloupec-hlavicka h4 { margin: 0; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--teal); border-left: 3px solid var(--teal); padding-left: 9px; }
 .sloupec-karty { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
-  gap: var(--space-2); padding: 2px; }
+  gap: var(--space-2); padding: 2px; scrollbar-width: none; -ms-overflow-style: none; }
+/* posuvník sloupce skrytý — roluje se kolečkem / tažením u kraje */
+.sloupec-karty::-webkit-scrollbar { width: 0; height: 0; }
 /* karty si drží přirozenou výšku a sloupec se roluje — jinak by se ve flexu smrskly */
 .sloupec-karty > .karta { flex: 0 0 auto; }
 
