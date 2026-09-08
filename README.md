@@ -44,8 +44,7 @@ Běhová data (`kanban.sqlite`, `modely/`, `zalohy/`) leží mimo repo v `kanban
 ```sh
 cp app/config.vzor.php app/config.php     # a doplnit cesty, orderSecret, e-mail
 php app/instaluj.php                       # vytvoří DB + účet admin (heslo vypíše)
-php -S localhost:8091 -t web \
-  -d auto_prepend_file=/dev/null           # nebo nginx + PHP-FPM, viz NASAZENI.md
+php -S localhost:8091 -t web               # dev server; ostře nginx + PHP-FPM, viz NASAZENI.md
 ```
 
 Přihlášení: `admin` / heslo z výpisu instalátoru. Změnit v Nastavení → Uživatelé.
