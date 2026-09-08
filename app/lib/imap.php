@@ -109,6 +109,21 @@ function nactiPostu(): array {
 
     [$z, $parovani, $duvod] = sparujZpravu($m);
 
+    // Vlastní odchozí pošta, která doputovala zpět do stejné schránky —
+    // upozornění dílně, ranní přehled, kopie odpovědí zákazníkům. Nezpracovávat,
+    // jinak by upozornění o Nezařazeno založilo v Nezařazeno další záznam (smyčka).
+    $imapC = (array)cfg('imap', []);
+    $smtpC = (array)cfg('smtp', []);
+    $vlastniAdresy = array_filter(array_map('strtolower', [
+      trim((string)cfg('mailFrom', '')),
+      trim((string)($imapC['user'] ?? '')),
+      trim((string)($smtpC['user'] ?? '')),
+    ]));
+    if ($m['from_email'] !== '' && in_array($m['from_email'], $vlastniAdresy, true)) {
+      imap_setflag_full($mbox, (string)$u, '\\Seen', ST_UID);
+      continue;
+    }
+
     // Vlastní strojové upozornění z kalkulátoru (hlavička X-Poptavka-Cislo nebo
     // odesílatel kalkulator@…). Poptávku řeší pull import z objednavky.json, kde
     // jsou kompletní data — tenhle e-mail je jen kopie, do kanbanu ho netaháme.
