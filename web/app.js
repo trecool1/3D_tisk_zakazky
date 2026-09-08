@@ -147,13 +147,13 @@ function projde(z) {
   return true;
 }
 
-// Ruční pořadí má přednost, pak priorita, pak nejmenší rezerva nahoře.
+// Ruční pořadí (přetažení) má přednost; jinak nejnovější zakázka nahoře
+// (nejvyšší číslo P-RRRR-NNNN). Priorita se pozná z barvy, ne z pořadí.
 function poradiKaret(list) {
   return list.slice().sort((a, b) => {
     if (a.prioritaRucne !== b.prioritaRucne) return a.prioritaRucne ? -1 : 1;
     if (a.prioritaRucne) return a.poradi - b.poradi;
-    const d = PRIO[a.priorita].rank - PRIO[b.priorita].rank;
-    return d || (a.rezerva - b.rezerva);
+    return b.cislo.localeCompare(a.cislo, 'cs', { numeric: true });
   });
 }
 
@@ -324,17 +324,45 @@ function obrazovkaTabule() {
         vykresli();
       } }, 'Zrušit filtry')),
 
-    h('div', { class: 'tabule', id: 'tabule' },
-      h('div', { class: 'sloupce' }, viditelneSloupce().map(c => sloupec(c, filtrovane)))));
+    tabuleEl(filtrovane));
+}
+
+// Kontejner tabule i s vodorovným rolováním: kolečkem myši a u kraje při přetahování.
+function tabuleEl(filtrovane) {
+  const el = h('div', { class: 'tabule', id: 'tabule' },
+    h('div', { class: 'sloupce' }, viditelneSloupce().map(c => sloupec(c, filtrovane))));
+
+  // kolečko = vodorovné rolování; svislé rolování sloupce má přednost, dokud
+  // sloupec nedojede na kraj
+  el.addEventListener('wheel', e => {
+    if (!e.deltaY) return;
+    const karty = e.target.closest && e.target.closest('.sloupec-karty');
+    if (karty) {
+      const muzeSvisle = e.deltaY > 0
+        ? karty.scrollTop + karty.clientHeight < karty.scrollHeight - 1
+        : karty.scrollTop > 0;
+      if (muzeSvisle) return;
+    }
+    el.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }, { passive: false });
+
+  // při přetahování karty k levému/pravému okraji se tabule sama posouvá
+  el.addEventListener('dragover', e => {
+    const r = el.getBoundingClientRect();
+    const pas = 90;
+    if (e.clientX < r.left + pas)       el.scrollLeft -= 24;
+    else if (e.clientX > r.right - pas) el.scrollLeft += 24;
+  });
+
+  return el;
 }
 
 function prekresliTabuli() {
   // překreslení jen tabule, aby hledání nepřišlo o kurzor v poli
   const stary = $('#tabule');
   if (!stary) { vykresli(); return; }
-  const filtrovane = S.zakazky.filter(projde);
-  const novy = h('div', { class: 'tabule', id: 'tabule' },
-    h('div', { class: 'sloupce' }, viditelneSloupce().map(c => sloupec(c, filtrovane))));
+  const novy = tabuleEl(S.zakazky.filter(projde));
   novy.scrollLeft = stary.scrollLeft;
   stary.replaceWith(novy);
   const pruh = document.querySelector('.pruh-filtru');

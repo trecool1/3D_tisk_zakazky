@@ -109,6 +109,15 @@ function nactiPostu(): array {
 
     [$z, $parovani, $duvod] = sparujZpravu($m);
 
+    // Vlastní strojové upozornění z kalkulátoru (hlavička X-Poptavka-Cislo nebo
+    // odesílatel kalkulator@…). Poptávku řeší pull import z objednavky.json, kde
+    // jsou kompletní data — tenhle e-mail je jen kopie, do kanbanu ho netaháme.
+    if (($m['hlavicky']['x-poptavka-cislo'] ?? '') !== ''
+        || str_starts_with($m['from_email'], 'kalkulator@')) {
+      imap_setflag_full($mbox, (string)$u, '\\Seen', ST_UID);
+      continue;
+    }
+
     // automatické odpovědi kartu nezakládají ani nezvedají nepřečtenou zprávu
     if (jeAutomat($m['hlavicky'])) {
       $stat['automatu']++;
