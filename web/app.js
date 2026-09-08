@@ -801,7 +801,7 @@ function panelFirmy(z) {
                 h('td', {}, x.co),
                 h('td', { style: 'white-space:nowrap' }, dm(x.termin)),
                 h('td', { style: 'text-align:right;white-space:nowrap' }, kc(x.celkem)),
-                h('td', {}, nazevSloupce(x.stav))))))));
+                h('td', {}, nazevSloupce(x.stav)))))))));
 }
 
 function kooperace(z, koop) {
