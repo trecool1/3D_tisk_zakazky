@@ -354,16 +354,20 @@ function tabuleEl(filtrovane) {
   const el = h('div', { class: 'tabule', id: 'tabule' },
     h('div', { class: 'sloupce' }, viditelneSloupce().map(c => sloupec(c, filtrovane))));
 
-  // kolečko = vodorovné rolování; svislé rolování sloupce má přednost, dokud
-  // sloupec nedojede na kraj
+  // Kolečko: když je kurzor nad dlouhým sloupcem, roluje se sloupec svisle;
+  // jinak (nebo když sloupec dojel na kraj) se roluje tabule vodorovně.
   el.addEventListener('wheel', e => {
     if (!e.deltaY) return;
     const karty = e.target.closest && e.target.closest('.sloupec-karty');
-    if (karty) {
-      const muzeSvisle = e.deltaY > 0
-        ? karty.scrollTop + karty.clientHeight < karty.scrollHeight - 1
-        : karty.scrollTop > 0;
-      if (muzeSvisle) return;
+    const dlouhy = karty && karty.scrollHeight - karty.clientHeight > 1;
+    if (dlouhy) {
+      const naDno   = karty.scrollTop + karty.clientHeight >= karty.scrollHeight - 1;
+      const naVrchu = karty.scrollTop <= 0;
+      if (!(e.deltaY > 0 && naDno) && !(e.deltaY < 0 && naVrchu)) {
+        karty.scrollTop += e.deltaY;
+        e.preventDefault();
+        return;
+      }
     }
     el.scrollLeft += e.deltaY;
     e.preventDefault();
