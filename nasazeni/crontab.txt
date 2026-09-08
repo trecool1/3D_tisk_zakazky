@@ -26,8 +26,8 @@
 # noční záloha DB (VACUUM INTO) + tar modelů, drží se 14 dní
 30 2 * * *   php /var/www/kanban-app/cron/zaloha.php            >> /var/www/kanban-data/cron.log 2>&1
 
-# příchozí pošta z IMAP — párování odpovědí zákazníků, nové karty, Nezařazeno.
-# ZATÍM VYPNUTO: schránka pokusss74@seznam.cz je sdílená s upozorněními
-# z kalkulátoru; cron by je četl a označoval jako přečtené. Zapnout až bude
-# samostatná schránka jen pro zakázky (viz NASAZENI.md krok 4).
-#*/5 * * * *  php /var/www/kanban-app/cron/posta.php             >> /var/www/kanban-data/cron.log 2>&1
+# příchozí pošta z IMAP — párování odpovědí zákazníků do konverzace, zbytek do
+# Nezařazeno. Schránka pokusss74@seznam.cz je sdílená s upozorněními z kalkulátoru:
+# ta jdou podle hlavičky X-Poptavka-Cislo potichu pryč, cron ale VŠECHNU poštu
+# ve schránce označuje jako přečtenou. Ideálně samostatná schránka jen pro zakázky.
+*/5 * * * *  php /var/www/kanban-app/cron/posta.php             >> /var/www/kanban-data/cron.log 2>&1
