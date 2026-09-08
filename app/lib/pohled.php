@@ -104,6 +104,7 @@ function zakazkaDetail(array $z): array {
     'soubory'     => array_map(fn($f) => [
         'id' => (int)$f['id'], 'nazev' => $f['nazev'],
         'velikost' => (int)$f['velikost'], 'typ' => $f['typ'],
+        'pridal' => $f['pridal'] ?? '', 'kdy' => $f['vytvoreno'] ?? '',
       ], souboryZakazky((int)$z['id'])),
     'zpravy'      => array_map(fn($m) => [
         'id' => (int)$m['id'], 'typ' => $m['typ'], 'od' => $m['od'], 'komu' => $m['komu'],

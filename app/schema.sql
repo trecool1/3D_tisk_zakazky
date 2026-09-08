@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS soubory (
   cesta      TEXT    NOT NULL,          -- relativně ke KANBAN_MODELY
   velikost   INTEGER NOT NULL DEFAULT 0,
   typ        TEXT    NOT NULL DEFAULT '',
+  pridal     TEXT    NOT NULL DEFAULT '',   -- jméno, kdo přílohu nahrál ručně; prázdné = z kalkulátoru
   vytvoreno  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS ix_soubory_zak ON soubory(zakazka_id);

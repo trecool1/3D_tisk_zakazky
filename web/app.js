@@ -75,6 +75,7 @@ const S = {
   hledani: '', fKdo: '', fTech: '', fPrio: '', fNeprectene: false, fPoTerminu: false, fExterni: false,
   fStav: '', razeni: 'termin',
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
+  smazPriloha: null, dropAktivni: false,
   firmy: [], firmaKlic: null, posta: [], postaFiltr: 'vse', nezarazeno: null,
   nastaveniData: null, pubCislo: null, kopirovano: false,
   chyba: '', nacitam: false,
@@ -458,7 +459,8 @@ async function zmenPoradi(cislo, nad) {
 async function otevri(cislo) {
   try {
     S.open = cislo; S.sel = cislo;
-    Object.assign(S, { draft: '', prebitCena: '', prebitDuvod: '', rezim: 'odpoved', histOpen: false });
+    Object.assign(S, { draft: '', prebitCena: '', prebitDuvod: '', rezim: 'odpoved', histOpen: false,
+      smazPriloha: null, dropAktivni: false });
     S.detail = (await api('detail', { cislo })).zakazka;
     await nactiStav();
     vykresli();
@@ -653,12 +655,7 @@ function detailPanel() {
 
       /* 05 — Modely */
       sekce('05 — Modely a přílohy'),
-      h('div', { style: 'display:flex;flex-direction:column;gap:4px;font-size:14px;margin-bottom:var(--space-6)' },
-        z.soubory.map(f => h('div', { style: 'display:flex;align-items:baseline;gap:var(--space-2)' },
-          h('a', { href: 'soubor.php?id=' + f.id }, f.nazev),
-          h('span', { style: 'color:var(--muted);font-size:13px' }, mb(f.velikost) + ' · ' + f.typ))),
-        z.modelyChybi && h('div', { style: 'color:var(--red)' }, 'Modely chybí — nahrávání z kalkulátoru se nepovedlo.'),
-        !z.modelyChybi && z.soubory.length === 0 && h('div', { style: 'color:var(--muted)' }, 'Žádné soubory.')),
+      modelyPrilohy(z),
 
       /* 06 — Konverzace */
       sekce('06 — Konverzace'),
@@ -749,6 +746,61 @@ function kooperace(z, koop) {
           } }, o.dalsi)))),
     h('div', { style: 'font-size:13px;color:var(--muted-2);max-width:66ch;margin-bottom:var(--space-6)' },
       'Příznak interní / externí výroba je u každého materiálu a postprocesu v pricing.json — kanban ho jen čte. Zákazník partnera nikdy neuvidí; doprava a lhůta partnera se počítají do potřeby hodin, a tím do priority.'));
+}
+
+function modelyPrilohy(z) {
+  const nahraj = async (fileList) => {
+    const soubory = Array.from(fileList || []);
+    if (!soubory.length) return;
+    const fd = new FormData();
+    fd.append('cislo', z.cislo);
+    soubory.forEach(f => fd.append('soubory[]', f));
+    S.dropAktivni = false;
+    try {
+      const r = await fetch('api.php?a=priloha-nahraj', { method: 'POST', body: fd, credentials: 'same-origin' });
+      let v = null; try { v = await r.json(); } catch { /* nechá null */ }
+      if (!r.ok || !v || v.ok === false) throw new Error((v && v.chyba) || ('Chyba ' + r.status));
+      await obnov();
+    } catch (e) { hlas(e); }
+  };
+
+  return h('div', { style: 'display:flex;flex-direction:column;gap:var(--space-2);font-size:14px;margin-bottom:var(--space-6)' },
+    z.soubory.map(f => {
+      const potvrzuje = S.smazPriloha === f.id;
+      return h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:4px var(--space-2)' },
+        h('a', { href: 'soubor.php?id=' + f.id }, f.nazev),
+        h('span', { style: 'color:var(--muted);font-size:13px' }, mb(f.velikost) + (f.typ ? ' · ' + f.typ : '')),
+        f.pridal && h('span', { style: 'color:var(--muted);font-size:13px' },
+          '· ' + f.pridal + (f.kdy ? ' ' + dt(f.kdy) : '')),
+        muzeMenit() && !potvrzuje && h('button', { class: 'btn btn-ghost', style: 'padding:1px 6px;font-size:12px',
+          onclick: () => { S.smazPriloha = f.id; vykresli(); } }, 'Odebrat'),
+        muzeMenit() && potvrzuje && h('span', {
+            style: 'display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2);font-size:13px;color:var(--red)' },
+          'Odebrat přílohu?',
+          h('button', { class: 'btn btn-ghost', style: 'padding:1px 6px;font-size:12px;color:var(--red)',
+            onclick: async () => {
+              S.smazPriloha = null;
+              try { await api('priloha-smaz', { cislo: z.cislo, soubor: f.id }); await obnov(); } catch (e) { hlas(e); }
+            } }, 'Ano, odebrat'),
+          h('button', { class: 'btn btn-ghost', style: 'padding:1px 6px;font-size:12px',
+            onclick: () => { S.smazPriloha = null; vykresli(); } }, 'Zrušit')));
+    }),
+    z.modelyChybi && h('div', { style: 'color:var(--red)' }, 'Modely chybí — nahrávání z kalkulátoru se nepovedlo.'),
+    !z.modelyChybi && z.soubory.length === 0 && h('div', { style: 'color:var(--muted)' }, 'Žádné soubory.'),
+
+    muzeMenit() && h('div', {
+        style: 'display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3);border:1px dashed '
+          + (S.dropAktivni ? 'var(--teal)' : 'var(--line)') + ';background:'
+          + (S.dropAktivni ? 'var(--teal-100)' : 'var(--panel)') + ';padding:var(--space-3);margin-top:var(--space-1)',
+        ondragover: e => { e.preventDefault(); if (!S.dropAktivni) { S.dropAktivni = true; vykresli(); } },
+        ondragleave: e => { if (e.currentTarget.contains(e.relatedTarget)) return;
+          if (S.dropAktivni) { S.dropAktivni = false; vykresli(); } },
+        ondrop: e => { e.preventDefault(); S.dropAktivni = false; nahraj(e.dataTransfer.files); } },
+      h('label', { class: 'btn btn-secondary', style: 'cursor:pointer;padding:6px 14px' }, 'Vybrat soubory',
+        h('input', { type: 'file', multiple: true, style: 'display:none',
+          onchange: e => { nahraj(e.target.files); e.target.value = ''; } })),
+      h('span', { style: 'font-size:13px;color:var(--muted-2)' },
+        'nebo přetažením sem — tiskové podklady, faktury od partnerů, doklady, fotky (do 200 MB)')));
 }
 
 function konverzace(z) {
@@ -1187,6 +1239,8 @@ function obrazovkaNahled() {
 function vykresli() {
   const korenPuvodni = $('#app');
   const posunTabule = korenPuvodni ? (korenPuvodni.querySelector('#tabule') || {}).scrollLeft : 0;
+  // detail se překresluje celý — udrž jeho svislé odrolování (jinak po každé změně skočí nahoru)
+  const posunDetail = korenPuvodni ? (korenPuvodni.querySelector('.detail') || {}).scrollTop : 0;
 
   let obsah;
   if (!S.user) {
@@ -1214,6 +1268,8 @@ function vykresli() {
   if (korenPuvodni) korenPuvodni.replaceWith(novy); else document.body.append(novy);
   const tab = novy.querySelector('#tabule');
   if (tab && posunTabule) tab.scrollLeft = posunTabule;
+  const det = novy.querySelector('.detail');
+  if (det && posunDetail) det.scrollTop = posunDetail;
 }
 
 /* ---------- klávesnice ---------- */

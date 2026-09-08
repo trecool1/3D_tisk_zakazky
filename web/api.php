@@ -15,6 +15,8 @@ header('Cache-Control: no-store');
 
 $akce = (string)($_GET['a'] ?? '');
 $v    = vstupJson();
+// Multipart požadavky (nahrání přílohy) nemají JSON tělo — parametry jsou v $_POST.
+if (!$v && !empty($_POST)) $v = $_POST;
 
 // pomůcka: načti zakázku z parametru a ověř, že existuje
 $zakazka = function () use ($v): array {
@@ -204,6 +206,89 @@ try {
       vyzadujZapis();
       $z = $zakazka();
       if (!vratitSem($z, (int)($v['historie'] ?? 0))) chyba('Tento záznam nejde vrátit.');
+      odesliJson(['ok' => true]);
+    }
+
+    /* ---------- přílohy (ruční nahrání / odebrání v detailu) ---------- */
+
+    case 'priloha-nahraj': {
+      // multipart POST: pole 'cislo' + jeden nebo víc souborů v 'soubory[]'
+      vyzadujZapis();
+      $z = $zakazka();
+
+      $vstup = $_FILES['soubory'] ?? null;
+      if ($vstup === null) chyba('Nepřišel žádný soubor.');
+
+      // sjednocení tvaru na seznam { name, tmp_name, error, size }
+      $seznam = is_array($vstup['name'])
+        ? array_map(fn($i) => [
+            'name' => $vstup['name'][$i], 'tmp_name' => $vstup['tmp_name'][$i],
+            'error' => $vstup['error'][$i], 'size' => $vstup['size'][$i],
+          ], array_keys($vstup['name']))
+        : [$vstup];
+
+      $limit = 200 * 1024 * 1024;
+      $dir   = rtrim((string)cfg('modely'), '/') . '/' . $z['cislo'];
+      if (!is_dir($dir)) @mkdir($dir, 0770, true);
+
+      $pridane = [];
+      foreach ($seznam as $f) {
+        if (($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
+        if (($f['error'] ?? 1) !== UPLOAD_ERR_OK) chyba('Nahrání souboru „' . $f['name'] . '" selhalo.');
+        if ((int)$f['size'] > $limit) chyba('Soubor „' . $f['name'] . '" je větší než 200 MB.');
+
+        $nazev = preg_replace('/[^\w.\- ()]/u', '_', basename((string)$f['name']));
+        if ($nazev === '' || $nazev === '.' || $nazev === '..') continue;
+
+        // kolize jmen: přípona _2, _3…
+        $zaklad  = pathinfo($nazev, PATHINFO_FILENAME);
+        $pripona = pathinfo($nazev, PATHINFO_EXTENSION);
+        $cil = $dir . '/' . $nazev;
+        for ($k = 2; is_file($cil); $k++) {
+          $nazev = $zaklad . '_' . $k . ($pripona !== '' ? '.' . $pripona : '');
+          $cil   = $dir . '/' . $nazev;
+        }
+
+        if (!@move_uploaded_file($f['tmp_name'], $cil)) {
+          zaloguj('Přílohu nelze uložit: ' . $z['cislo'] . '/' . $nazev);
+          continue;
+        }
+        @chmod($cil, 0640);
+        db()->prepare('INSERT INTO soubory (zakazka_id, nazev, cesta, velikost, typ, pridal) VALUES (?,?,?,?,?,?)')
+            ->execute([(int)$z['id'], $nazev, $z['cislo'] . '/' . $nazev, (int)@filesize($cil),
+                       strtoupper(pathinfo($nazev, PATHINFO_EXTENSION)), mojeJmeno()]);
+        $pridane[] = $nazev;
+      }
+
+      if (!$pridane) chyba('Soubor se nepodařilo uložit.');
+
+      db()->prepare('UPDATE zakazky SET modely_chybi = 0, zmeneno = ? WHERE id = ?')
+          ->execute([ted(), (int)$z['id']]);
+      $popis = 'Přiloženo: ' . implode(', ', $pridane) . ' — ' . mojeJmeno();
+      systemovyZaznam((int)$z['id'], $popis);
+      historieZapis((int)$z['id'], $popis, null);
+      odesliJson(['ok' => true, 'pridano' => $pridane]);
+    }
+
+    case 'priloha-smaz': {
+      vyzadujZapis();
+      $z = $zakazka();
+      $q = db()->prepare('SELECT * FROM soubory WHERE id = ? AND zakazka_id = ?');
+      $q->execute([(int)($v['soubor'] ?? 0), (int)$z['id']]);
+      $f = $q->fetch();
+      if (!$f) chyba('Příloha nenalezena.', 404);
+
+      // smazat z disku jen když cesta opravdu leží pod adresářem s modely
+      $zaklad = realpath((string)cfg('modely'));
+      $cesta  = realpath($zaklad . '/' . $f['cesta']);
+      if ($zaklad !== false && $cesta !== false && str_starts_with($cesta, $zaklad . DIRECTORY_SEPARATOR)) {
+        @unlink($cesta);
+      }
+      db()->prepare('DELETE FROM soubory WHERE id = ?')->execute([(int)$f['id']]);
+
+      $popis = 'Odebrána příloha ' . $f['nazev'] . ' — ' . mojeJmeno();
+      systemovyZaznam((int)$z['id'], $popis);
+      historieZapis((int)$z['id'], $popis, null);
       odesliJson(['ok' => true]);
     }
 

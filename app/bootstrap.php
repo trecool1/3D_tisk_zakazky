@@ -38,6 +38,16 @@ function db(): PDO {
 
 function schemaAktualizuj(): void {
   db()->exec(file_get_contents(KANBAN_APP . '/schema.sql'));
+  // Sloupce doplněné do už existujících tabulek (CREATE IF NOT EXISTS je nepřidá).
+  sloupecZajisti('soubory', 'pridal', "TEXT NOT NULL DEFAULT ''");
+}
+
+/** Idempotentně přidá sloupec do tabulky, pokud v ní ještě není. */
+function sloupecZajisti(string $tabulka, string $sloupec, string $definice): void {
+  foreach (db()->query('PRAGMA table_info(' . $tabulka . ')') as $r) {
+    if ($r['name'] === $sloupec) return;
+  }
+  db()->exec('ALTER TABLE ' . $tabulka . ' ADD COLUMN ' . $sloupec . ' ' . $definice);
 }
 
 /* ---------- drobnosti ---------- */
