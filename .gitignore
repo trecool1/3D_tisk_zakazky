@@ -1,0 +1,7 @@
+# ostrá konfigurace se secretem a hesly
+app/config.php
+# běhová data (jsou na serveru mimo repo)
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log

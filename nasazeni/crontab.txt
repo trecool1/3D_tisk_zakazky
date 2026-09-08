@@ -1,0 +1,17 @@
+# Kanban zakázek Cadmia3D — cron pro uživatele cadmia
+#   crontab -e     (vložit řádky níže)
+# Běží jako cadmia, protože PHP-FPM pool kanbanu jede taky jako cadmia —
+# všichni zapisovatelé do kanban.sqlite jsou pak stejný uživatel.
+
+# příchozí pošta z IMAP — párování odpovědí, nové karty, Nezařazeno
+*/5 * * * *  php /var/www/kanban-app/cron/posta.php             >> /var/www/kanban-data/cron.log 2>&1
+
+# ranní přehled dílně: co tisknout, co expedovat, po termínu, neodpovězené nabídky
+10 7 * * *   php /var/www/kanban-app/cron/denni.php             >> /var/www/kanban-data/cron.log 2>&1
+
+# noční záloha DB (VACUUM INTO) + tar modelů, drží se 14 dní
+30 2 * * *   php /var/www/kanban-app/cron/zaloha.php            >> /var/www/kanban-data/cron.log 2>&1
+
+# PŘECHODNĚ: pull poptávek z poptavky/objednavky.json kalkulátoru.
+# Vypnout, jakmile je v pricing.json orderEndpoint přepnutý na order.php kanbanu.
+*/10 * * * * php /var/www/kanban-app/cron/import-kalkulator.php >> /var/www/kanban-data/cron.log 2>&1

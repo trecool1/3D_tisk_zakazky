@@ -1,0 +1,213 @@
+/* Kanban zakázek Cadmia3D
+   Hodnoty jsou převzaté z návrhu beze změny — barvy, rozestupy, typografie.
+   Fonty jsou lokální, aby tabule fungovala i bez internetu. */
+
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:400; font-display:swap;
+  src:url("fonts/rajdhani-400-latin-ext.woff2") format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:400; font-display:swap;
+  src:url("fonts/rajdhani-400-latin.woff2") format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:500; font-display:swap;
+  src:url("fonts/rajdhani-500-latin-ext.woff2") format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:500; font-display:swap;
+  src:url("fonts/rajdhani-500-latin.woff2") format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:600; font-display:swap;
+  src:url("fonts/rajdhani-600-latin-ext.woff2") format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:600; font-display:swap;
+  src:url("fonts/rajdhani-600-latin.woff2") format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:700; font-display:swap;
+  src:url("fonts/rajdhani-700-latin-ext.woff2") format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Rajdhani'; font-style:normal; font-weight:700; font-display:swap;
+  src:url("fonts/rajdhani-700-latin.woff2") format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
+:root {
+  --font-heading: 'Rajdhani', system-ui, sans-serif;
+  --font-body: 'Rajdhani', system-ui, sans-serif;
+  --bg: #ffffff; --panel: #f2f6f8; --line: #d7e3e8;
+  --ink: #1c2b33; --muted-2: #43606d; --muted: #55707d;
+  --teal: #0f5c70; --teal-700: #0a4453; --teal-100: #e5eff2;
+  --red: #b3271e; --red-mid: #d4553f; --red-100: #fbeceb;
+  --space-1: 4px; --space-2: 8px; --space-3: 14px; --space-4: 20px;
+  --space-5: 26px; --space-6: 32px; --space-7: 40px; --space-8: 48px;
+  --radius-sm: 2px; --radius-md: 2px;
+  --shadow-sm: 0 1px 2px rgba(28,43,51,.08);
+  --shadow-lg: -12px 0 40px rgba(28,43,51,.18);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); font-size: 16px; color: var(--ink); background: var(--bg); }
+h1, h2, h3, h4 { font-family: var(--font-heading); font-weight: 700; letter-spacing: 0.01em; }
+h3 { text-transform: uppercase; color: var(--teal); font-size: 20px; }
+a { color: var(--teal); text-decoration: none; border-bottom: 1px solid var(--line); }
+a:hover { color: var(--teal-700); border-bottom-color: var(--teal); }
+*:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+input, select, textarea, button { font-family: var(--font-body); font-size: 15px; color: var(--ink); }
+
+.input { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.input:hover { border-color: var(--teal); }
+.input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px var(--teal-100); }
+
+.btn { font-family: var(--font-heading); font-weight: 600; font-size: 14px; letter-spacing: 0.04em;
+  text-transform: uppercase; border-radius: var(--radius-sm); padding: 7px 16px; cursor: pointer;
+  border: 1px solid transparent; }
+.btn-primary { background: var(--teal); color: #fff; }
+.btn-primary:hover { background: var(--teal-700); }
+.btn-secondary { background: #fff; color: var(--teal); border-color: var(--teal); }
+.btn-secondary:hover { background: var(--teal-100); }
+.btn-ghost { background: none; color: var(--teal); }
+.btn-ghost:hover { color: var(--teal-700); background: var(--teal-100); }
+.btn:disabled { opacity: .5; cursor: default; }
+
+.card { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--teal);
+  border-radius: var(--radius-sm); }
+.card:hover { border-color: var(--teal); }
+
+.table { border-collapse: collapse; }
+.table th { font-family: var(--font-heading); font-weight: 600; font-size: 13px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); text-align: left; padding: 7px 10px;
+  border-bottom: 1px solid var(--line); }
+.table td { padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 16px; }
+.table tbody tr:hover td { background: var(--panel); }
+
+.kicker { font-family: var(--font-heading); font-weight: 600; font-size: 13px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--teal); border-left: 3px solid var(--teal);
+  padding-left: 9px; margin: 0 0 var(--space-3); }
+
+/* ---------- kostra ---------- */
+
+.app { min-height: 100vh; max-width: 100%; overflow-x: hidden; background: var(--bg); color: var(--ink);
+  display: flex; flex-direction: column; }
+
+.hlavicka { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-3); }
+.wordmark { display: flex; align-items: center; gap: var(--space-2); }
+.wordmark .cadmia { font-family: var(--font-heading); font-weight: 400; font-size: 26px;
+  letter-spacing: 0.16em; color: var(--ink); }
+.wordmark .kostka { font-family: var(--font-heading); font-weight: 700; font-size: 24px; letter-spacing: 0.02em;
+  background: var(--teal); color: #fff; padding: 2px 9px 3px; border-radius: 9px; }
+.wordmark .sekce { font-family: var(--font-heading); font-size: 13px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted); padding-left: var(--space-2); border-left: 1px solid var(--line); }
+
+nav.navigace { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; min-width: 0; }
+nav.navigace button { background: none; border: 0; padding: 3px 0; cursor: pointer;
+  font-family: var(--font-heading); font-weight: 600; font-size: 14px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); border-bottom: 2px solid transparent; }
+nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal); }
+
+.hlavicka-vpravo { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--space-1) var(--space-4); font-size: 13px; color: var(--muted-2); min-width: 0; }
+.pocitadlo { background: transparent; border: 1px solid var(--line); padding: 3px 10px;
+  font-family: var(--font-heading); font-weight: 600; font-size: 13px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted); white-space: nowrap; cursor: default; }
+.pocitadlo.ma { background: var(--red-100); color: var(--red); cursor: pointer; }
+.pocitadlo.aktivni { background: var(--red); color: #fff; cursor: pointer; }
+.pocitadlo.ma:hover, .pocitadlo.aktivni:hover { filter: brightness(0.94); }
+.avatar { display: inline-flex; flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--teal-100); color: var(--teal-700); align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; }
+.stitek-cteni { font-family: var(--font-heading); font-weight: 600; font-size: 12px; letter-spacing: 0.1em;
+  text-transform: uppercase; background: var(--line); color: var(--ink); padding: 2px 8px; }
+
+/* ---------- tabule ---------- */
+
+.filtry { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
+  padding: 0 var(--space-6) var(--space-3); }
+.prepinac { background: #fff; border: 1px solid var(--line); padding: 6px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; font-family: var(--font-heading); font-weight: 600; font-size: 13px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-2); }
+.prepinac.zap { background: var(--red); color: #fff; border-color: var(--red); }
+.prepinac.zap.teal { background: var(--teal); border-color: var(--teal); }
+.pruh-filtru { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
+  margin: 0 var(--space-6) var(--space-3); background: var(--panel); border-left: 3px solid var(--teal);
+  padding: 7px 12px; }
+
+.tabule { flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; padding: 0 var(--space-6) var(--space-6); }
+.sloupce { display: flex; gap: var(--space-6); align-items: stretch; height: 100%; min-height: 100%; }
+.sloupec { flex: 0 0 auto; align-self: stretch; display: flex; flex-direction: column;
+  background: transparent; border: 2px dashed transparent; border-radius: var(--radius-md); padding: 2px 4px 4px; }
+.sloupec.nad { background: var(--teal-100); border-color: var(--teal); }
+.sloupec-hlavicka { display: flex; align-items: center; gap: var(--space-2); padding: 0 0 var(--space-2);
+  border-bottom: 1px solid var(--line); margin-bottom: var(--space-3); }
+.sloupec-hlavicka h4 { margin: 0; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--teal); border-left: 3px solid var(--teal); padding-left: 9px; }
+.sloupec-karty { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
+  gap: var(--space-2); padding: 2px; }
+
+.karta { padding: 0; overflow: hidden; }
+.karta .telo { padding: var(--space-3); display: flex; flex-direction: column; gap: 6px; }
+.karta .radek1 { display: flex; align-items: baseline; gap: var(--space-2); }
+.karta .cislo { font-family: var(--font-heading); font-weight: 600; font-size: 14px;
+  letter-spacing: 0.1em; color: var(--muted); }
+.karta .tecka { width: 7px; height: 7px; border-radius: 50%; background: var(--red); display: inline-block; }
+.karta .rucne { font-size: 12px; color: var(--muted); }
+.karta .prio { margin-left: auto; font-family: var(--font-heading); font-weight: 600; font-size: 12px;
+  letter-spacing: 0.1em; text-transform: uppercase; }
+.karta .radek2 { display: flex; gap: var(--space-2); align-items: flex-start; }
+.karta .nahled { width: 44px; height: 44px; flex: 0 0 auto; background: var(--line); display: flex;
+  align-items: center; justify-content: center; font-size: 10px; color: var(--muted-2); text-align: center;
+  line-height: 1.1; border-radius: var(--radius-sm); }
+.karta .zakaznik { font-family: var(--font-heading); font-weight: 700; font-size: 21px; line-height: 1.1;
+  text-transform: uppercase; color: var(--teal); }
+.karta .souhrn { font-size: 15px; color: var(--muted-2); }
+.karta .radek3 { display: flex; align-items: baseline; gap: var(--space-2); font-size: 16px; }
+.karta .ini { margin-left: auto; display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
+  align-items: center; justify-content: center; font-size: 11px; }
+.karta .znacka { font-size: 14px; padding: 3px 7px; }
+.karta.tazena { opacity: .4; }
+.karta.vybrana { outline: 2px solid var(--teal); outline-offset: 1px; }
+
+/* ---------- detail ---------- */
+
+.zakryt { position: fixed; inset: 0; background: color-mix(in srgb, #1c2b33 28%, transparent); z-index: 40; }
+.detail { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 94vw); background: var(--bg);
+  box-shadow: var(--shadow-lg); z-index: 41; overflow-y: auto; padding: var(--space-6); }
+.detail h2 { margin: var(--space-1) 0 var(--space-4); font-size: 32px; text-transform: uppercase; color: var(--teal); }
+.detail-pole { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3); margin-bottom: var(--space-6); }
+.detail-pole label { display: flex; flex-direction: column; gap: 3px; font-size: 12px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.detail-pole .input { padding: 5px 8px; font-size: 14px; text-transform: none; letter-spacing: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--teal);
+  padding: var(--space-3) var(--space-4); }
+.varovani { background: var(--red-100); color: var(--red); padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md); font-size: 14px; margin-bottom: var(--space-6); }
+
+/* ---------- stránky ---------- */
+
+.obrazovka { padding: 0 var(--space-6) var(--space-8); }
+.mrizka { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-8); max-width: 1100px; }
+.scroll-x { overflow-x: auto; }
+
+.popisek { display: block; font-family: var(--font-heading); font-weight: 600; font-size: 13px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+
+.hlaska { padding: var(--space-4) var(--space-6); color: var(--muted); font-size: 15px; }
+.chyba-pruh { background: var(--red-100); color: var(--red); padding: var(--space-2) var(--space-6); font-size: 15px; }
+
+/* ---------- tablet a telefon ---------- */
+/* Na tabletu u tiskárny se stav mění dropdownem a hit targety mají aspoň 44 px. */
+
+.karta-stav { display: none; }
+@media (pointer: coarse), (max-width: 900px) {
+  .karta-stav { display: block; width: 100%; min-height: 44px; padding: 8px; margin-top: 4px; }
+  .karta .telo { padding: var(--space-3); gap: 8px; }
+  .btn { padding: 11px 16px; min-height: 44px; }
+  .prepinac { min-height: 44px; }
+  nav.navigace button { padding: 10px 0; }
+  .input { min-height: 40px; }
+}
+@media (max-width: 700px) {
+  .hlavicka { padding: var(--space-3) var(--space-3) var(--space-2); gap: var(--space-2); }
+  .filtry, .obrazovka, .tabule { padding-left: var(--space-3); padding-right: var(--space-3); }
+  .pruh-filtru { margin-left: var(--space-3); margin-right: var(--space-3); }
+  .detail { padding: var(--space-3); }
+  .detail h2 { font-size: 24px; }
+  .sloupce { gap: var(--space-3); }
+}
