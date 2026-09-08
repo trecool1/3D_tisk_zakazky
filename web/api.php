@@ -86,10 +86,11 @@ try {
     case 'detail': {
       vyzadujPrihlaseni();
       $z = $zakazka();
-      // otevřením se příchozí zprávy označí jako přečtené
+      // otevřením se příchozí zprávy označí jako přečtené a „zákazník schválil" jako viděné
       if (muzeMenit()) {
         db()->prepare('UPDATE zpravy SET precteno = 1 WHERE zakazka_id = ? AND typ = "prichozi"')
             ->execute([(int)$z['id']]);
+        db()->prepare('UPDATE zakazky SET schvaleno_videno = 1 WHERE id = ?')->execute([(int)$z['id']]);
       }
       odesliJson(['ok' => true, 'zakazka' => zakazkaDetail($z)]);
     }

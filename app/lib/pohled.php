@@ -14,10 +14,6 @@ function zakazkaProSeznam(array $z): array {
   $konf  = jsonDek($z['konfigurace'], []);
   $ks    = array_sum(array_map(fn($p) => (int)$p['pocet'], $pol));
   $soub  = souboryZakazky((int)$z['id']);
-  $qs = db()->prepare('SELECT 1 FROM zpravy WHERE zakazka_id = ? AND typ = "prichozi"
-                         AND precteno = 0 AND parovani = "schválení na stavové stránce" LIMIT 1');
-  $qs->execute([(int)$z['id']]);
-  $schvalil = (bool)$qs->fetchColumn();
 
   return [
     'cislo'        => $z['cislo'],
@@ -38,7 +34,7 @@ function zakazkaProSeznam(array $z): array {
     'ks'           => $ks,
     'celkem'       => (float)($kal['celkem'] ?? 0),
     'neprectene'   => maNeprectenou((int)$z['id']),
-    'schvalilZakaznik' => $schvalil,
+    'schvalilZakaznik' => $z['stav'] === 'schvaleno' && (int)($z['schvaleno_videno'] ?? 1) === 0,
     'modelyChybi'  => (int)$z['modely_chybi'] === 1,
     'nedorucitelny'=> (int)$z['nedorucitelny'] === 1,
     'cekaDnu'      => $ceka,

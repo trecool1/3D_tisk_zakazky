@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS zakazky (
   zdroj             TEXT    NOT NULL DEFAULT 'rucne',  -- kalkulator | email | rucne
   token             TEXT    NOT NULL DEFAULT '',       -- stavová stránka
   nedorucitelny     INTEGER NOT NULL DEFAULT 0,
+  schvaleno_videno  INTEGER NOT NULL DEFAULT 1,   -- 0 = zákazník schválil, dílna zatím neviděla
   vytvoreno         TEXT    NOT NULL DEFAULT (datetime('now')),
   zmeneno           TEXT    NOT NULL DEFAULT (datetime('now'))
 );

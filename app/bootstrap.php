@@ -40,6 +40,7 @@ function schemaAktualizuj(): void {
   db()->exec(file_get_contents(KANBAN_APP . '/schema.sql'));
   // Sloupce doplněné do už existujících tabulek (CREATE IF NOT EXISTS je nepřidá).
   sloupecZajisti('soubory', 'pridal', "TEXT NOT NULL DEFAULT ''");
+  sloupecZajisti('zakazky', 'schvaleno_videno', 'INTEGER NOT NULL DEFAULT 1');
 }
 
 /** Idempotentně přidá sloupec do tabulky, pokud v ní ještě není. */
