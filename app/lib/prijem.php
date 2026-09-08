@@ -108,13 +108,14 @@ function prijmiPoptavku(array $d, array $soubory = []): array {
 
   pripojSoubory($z, array_merge($soubory, pripravenéNahravky($d)));
 
-  // poznámka z formuláře je první zprávou v konverzaci
-  if (trim((string)($kontakt['note'] ?? '')) !== '') {
-    db()->prepare('INSERT INTO zpravy (zakazka_id, typ, od, predmet, telo, parovani, precteno, kdy)
-                   VALUES (?,"prichozi",?,?,?,?,0,?)')
-        ->execute([$id, $zak['email'], 'Poptávka z kalkulátoru', (string)$kontakt['note'],
-                   'poptávka z kalkulátoru', ted()]);
-  }
+  // Poptávka je vždy první (NEPŘEČTENOU) zprávou v konverzaci — ať je nová karta
+  // na tabuli vidět jako nepřečtená, i když zákazník nenapsal poznámku.
+  $note = trim((string)($kontakt['note'] ?? ''));
+  db()->prepare('INSERT INTO zpravy (zakazka_id, typ, od, predmet, telo, parovani, precteno, kdy)
+                 VALUES (?,"prichozi",?,?,?,?,0,?)')
+      ->execute([$id, $zak['email'], 'Poptávka z kalkulátoru',
+                 $note !== '' ? $note : 'Nová poptávka z kalkulátoru (bez poznámky zákazníka).',
+                 'poptávka z kalkulátoru', ted()]);
 
   historieZapis($id, 'Poptávka přijata z kalkulátoru', null, 'systém');
   systemovyZaznam($id, 'Karta založena z poptávky ' . $cislo
