@@ -452,12 +452,10 @@ try {
           'prahVysoka'     => (float)nastaveni('prahVysoka', '24'),
           'prahNormalni'   => (float)nastaveni('prahNormalni', '72'),
           'dnyBezOdpovedi' => (int)nastaveni('dnyBezOdpovedi', '5'),
-          'koopPartner'    => nastaveni('koopPartner', ''),
-          'koopLhutaDnu'   => (int)nastaveni('koopLhutaDnu', '5'),
-          'koopDopravaDnu' => (int)nastaveni('koopDopravaDnu', '2'),
         ],
+        'infoMaily'    => nastaveni('infoMaily', '0') === '1',
+        'infoMailyKam' => nastaveni('infoMailyKam', ''),
         'sablony' => sablony(),
-        'koop'    => pricingKoopPrehled(),
         'napojeni'=> [
           'endpoint'   => '/order.php',
           'secret'     => cfg('orderSecret') && cfg('orderSecret') !== 'ZMEN_ME' ? '•••••••• nastaveno' : 'NENASTAVENO',
@@ -473,9 +471,11 @@ try {
 
     case 'nastaveni-uloz': {
       vyzadujAdmina();
-      foreach (['prahVysoka','prahNormalni','dnyBezOdpovedi','koopPartner','koopLhutaDnu','koopDopravaDnu'] as $k) {
+      foreach (['prahVysoka','prahNormalni','dnyBezOdpovedi'] as $k) {
         if (array_key_exists($k, $v)) nastavenoUloz($k, (string)$v[$k]);
       }
+      if (array_key_exists('infoMaily', $v))    nastavenoUloz('infoMaily', $v['infoMaily'] ? '1' : '0');
+      if (array_key_exists('infoMailyKam', $v)) nastavenoUloz('infoMailyKam', trim((string)$v['infoMailyKam']));
       odesliJson(['ok' => true]);
     }
 

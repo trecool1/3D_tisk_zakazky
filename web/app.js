@@ -1137,6 +1137,10 @@ function obrazovkaNastaveni() {
   const ulozPrahy = async (klic, hodnota) => {
     try { await api('nastaveni-uloz', { [klic]: hodnota }); await nactiStav(); } catch (e) { hlas(e); }
   };
+  const ulozInfo = async (data) => {
+    try { await api('nastaveni-uloz', data); S.nastaveniData = await api('nastaveni'); vykresli(); }
+    catch (e) { hlas(e); }
+  };
   const pole = (label, klic, popis) => h('label', { style: 'display:flex;flex-direction:column;gap:4px' }, label,
     h('input', { class: 'input', type: 'number', value: d.prahy[klic], style: 'padding:5px 8px',
       onchange: e => ulozPrahy(klic, e.target.value) }),
@@ -1175,13 +1179,22 @@ function obrazovkaNastaveni() {
         pole('Normální priorita, pokud je rezerva pod (h)', 'prahNormalni'),
         pole('Upozornit na neodpovězenou nabídku po (dnech)', 'dnyBezOdpovedi'),
         h('div', { style: 'font-size:13px;color:var(--muted)' },
-          'Rezerva = hodiny do termínu − (tisk + schnutí + manipulace + přeprava u externích). Hodnoty přicházejí z kalkulátoru.'),
-        h('h4', { class: 'kicker', style: 'margin-top:var(--space-3)' }, 'Výchozí externí kooperace'),
-        h('label', { style: 'display:flex;flex-direction:column;gap:4px' }, 'Partner (když ho ceník neuvádí)',
-          h('input', { class: 'input', value: d.prahy.koopPartner, style: 'padding:5px 8px',
-            onchange: e => ulozPrahy('koopPartner', e.target.value) })),
-        pole('Lhůta u partnera (dnů)', 'koopLhutaDnu'),
-        pole('Doprava jedním směrem (dnů)', 'koopDopravaDnu'))),
+          'Rezerva = hodiny do termínu − (tisk + schnutí + manipulace + přeprava u externích). Hodnoty přicházejí z kalkulátoru.'))),
+
+    /* informační e-maily */
+    h('section', {},
+      h('h3', { style: 'margin:0 0 var(--space-1)' }, 'Informační e-maily'),
+      h('p', { style: 'font-size:14px;color:var(--muted-2);max-width:56ch;margin:0 0 var(--space-3)' },
+        'Souhrn nové pošty a ranní přehled dílny. Nemá vliv na odpovědi zákazníkům ani na příjem poptávek — ty chodí vždy.'),
+      h('label', { style: 'display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3)' },
+        h('input', { type: 'checkbox', checked: !!d.infoMaily,
+          onchange: e => ulozInfo({ infoMaily: e.target.checked }) }),
+        h('span', {}, 'Posílat informační e-maily')),
+      h('label', { style: 'display:flex;flex-direction:column;gap:4px;max-width:360px' + (d.infoMaily ? '' : ';opacity:.5') },
+        'Komu (víc adres oddělených čárkou)',
+        h('input', { class: 'input', value: d.infoMailyKam || '', placeholder: 'dilna@firma.cz, sef@firma.cz',
+          style: 'padding:5px 8px', disabled: !d.infoMaily,
+          onchange: e => ulozInfo({ infoMailyKam: e.target.value }) }))),
 
     /* šablony */
     h('section', {},
@@ -1198,8 +1211,8 @@ function obrazovkaNastaveni() {
         h('div', { style: 'font-size:13px;color:var(--muted)' },
           'Zástupné hodnoty: {cislo}, {jmeno}, {cena}, {termin}, {odkaz}'))),
 
-    /* uživatelé */
-    h('section', { style: 'min-width:0' },
+    /* uživatelé — přes celou šířku, ať se tabulka nemačká */
+    h('section', { style: 'min-width:0;grid-column:1/-1' },
       h('h3', { style: 'margin:0 0 var(--space-1)' }, 'Uživatelé a role'),
       h('p', { style: 'font-size:14px;color:var(--muted-2);max-width:56ch;margin:0 0 var(--space-3)' },
         'Přihlášení jménem a heslem, sezení v cookie. Deaktivovaný účet se nepřihlásí a nedá se mu nic přiřadit.'),
@@ -1233,23 +1246,6 @@ function obrazovkaNastaveni() {
         const heslo = prompt('Heslo:', '') || 'cadmia';
         ulozUzivatele({ jmeno, email, heslo, role: 'dilna' });
       } }, 'Přidat uživatele')),
-
-    /* externí výroba */
-    h('section', { style: 'min-width:0' },
-      h('h3', { style: 'margin:0 0 var(--space-1)' }, 'Externí výroba'),
-      h('p', { style: 'font-size:14px;color:var(--muted-2);max-width:56ch;margin:0 0 var(--space-3)' },
-        'Režim se nastavuje v kalkulátoru u každého materiálu a postprocesu (pricing.json). Kanban ho jen zobrazuje; partnera a lhůtu lze u konkrétní zakázky přebít v detailu karty.'),
-      h('div', { class: 'scroll-x' },
-        h('table', { class: 'table', style: 'width:100%;min-width:520px' },
-          h('thead', {}, h('tr', {}, h('th', {}, 'Položka ceníku'), h('th', {}, 'Druh'),
-            h('th', {}, 'Výroba'), h('th', {}, 'Partner a lhůta'))),
-          h('tbody', {}, d.koop.map(x => h('tr', {},
-            h('td', {}, x.nazev),
-            h('td', { style: 'color:var(--muted)' }, x.druh),
-            h('td', {}, h('span', { style: 'font-size:13px;padding:2px 7px;border-radius:var(--radius-md);background:'
-              + (x.externi ? 'var(--line)' : 'var(--teal-100)') + ';color:'
-              + (x.externi ? 'var(--ink)' : 'var(--teal-700)') }, x.externi ? 'externě' : 'u nás')),
-            h('td', { style: 'color:var(--muted-2)' }, x.partner))))))),
 
     /* napojení */
     h('section', {},

@@ -157,9 +157,13 @@ function stavovaUrl(array $z): string {
 /** Upozornění dílně — souhrn, ne zpráva za každou drobnost. */
 function upozorniDilnu(string $predmet, string $telo): void {
   if (defined('KANBAN_TICHA_POSTA') && KANBAN_TICHA_POSTA) return;   // tichý dávkový import
+  if (nastaveni('infoMaily', '0') !== '1') return;                   // vypnuto v Nastavení
+  // adresy z Nastavení (víc oddělených čárkou), jinak z config.php
+  $kam = array_values(array_filter(array_map('trim', explode(',', nastaveni('infoMailyKam', '')))));
+  if (!$kam) $kam = array_map('strval', (array)cfg('dilnaMaily', []));
   // strojová zpráva — ať ji čtečka schránky (i cizí systémy) poznají a nepárovaly
   $auto = ['Auto-Submitted' => 'auto-generated', 'Precedence' => 'bulk'];
-  foreach ((array)cfg('dilnaMaily', []) as $adresa) {
+  foreach ($kam as $adresa) {
     if (trim((string)$adresa) === '') continue;
     posliMail((string)$adresa, $predmet, $telo, $auto);
   }
