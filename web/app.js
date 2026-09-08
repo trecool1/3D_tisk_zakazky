@@ -327,6 +327,28 @@ function obrazovkaTabule() {
     tabuleEl(filtrovane));
 }
 
+// autoscroll tabule při přetahování karty — řízený časovačem, ať funguje plynule
+// i když se dragover přestane hlásit (kurzor u kraje okna)
+let _autoScrollTimer = null;
+let _dragX = 0;
+function zastavAutoScroll() {
+  if (_autoScrollTimer) { clearInterval(_autoScrollTimer); _autoScrollTimer = null; }
+  _dragX = 0;
+}
+function spustAutoScroll() {
+  if (_autoScrollTimer) return;
+  _autoScrollTimer = setInterval(() => {
+    const t = document.getElementById('tabule');
+    if (!t || !S.drag) { zastavAutoScroll(); return; }
+    const r = t.getBoundingClientRect();
+    const zona = 130;                 // aktivační pruh dovnitř od kraje tabule
+    if (_dragX && _dragX < r.left + zona)       t.scrollLeft -= 14;
+    else if (_dragX && _dragX > r.right - zona) t.scrollLeft += 14;
+  }, 16);
+}
+document.addEventListener('dragend', zastavAutoScroll);
+document.addEventListener('drop', zastavAutoScroll);
+
 // Kontejner tabule i s vodorovným rolováním: kolečkem myši a u kraje při přetahování.
 function tabuleEl(filtrovane) {
   const el = h('div', { class: 'tabule', id: 'tabule' },
@@ -347,12 +369,11 @@ function tabuleEl(filtrovane) {
     e.preventDefault();
   }, { passive: false });
 
-  // při přetahování karty k levému/pravému okraji se tabule sama posouvá
+  // sleduj kurzor při přetahování; vlastní posun dělá časovač
   el.addEventListener('dragover', e => {
-    const r = el.getBoundingClientRect();
-    const pas = 90;
-    if (e.clientX < r.left + pas)       el.scrollLeft -= 24;
-    else if (e.clientX > r.right - pas) el.scrollLeft += 24;
+    if (!S.drag) return;
+    _dragX = e.clientX;
+    spustAutoScroll();
   });
 
   return el;
