@@ -295,7 +295,8 @@ function obrazovkaTabule() {
   return h('div', { style: 'display:flex;flex-direction:column;flex:1;min-height:0' },
     h('div', { class: 'filtry' },
       h('input', {
-        class: 'input', value: S.hledani, placeholder: 'Hledat číslo, zákazníka, e-mail, soubor…',
+        id: 'hledani', class: 'input', value: S.hledani,
+        placeholder: 'Hledat číslo, zákazníka, e-mail, soubor…',
         style: 'width:290px;max-width:100%;padding:6px 10px',
         oninput: e => { S.hledani = e.target.value; prekresliTabuli(); },
       }),
@@ -1317,6 +1318,13 @@ function vykresli() {
   const posunTabule = korenPuvodni ? (korenPuvodni.querySelector('#tabule') || {}).scrollLeft : 0;
   // detail se překresluje celý — udrž jeho svislé odrolování (jinak po každé změně skočí nahoru)
   const posunDetail = korenPuvodni ? (korenPuvodni.querySelector('.detail') || {}).scrollTop : 0;
+  // udrž fokus (a kurzor) v poli, když překreslení přijde uprostřed psaní — např. hledání
+  const aktivni = document.activeElement;
+  const fokus = aktivni && aktivni.id && korenPuvodni && korenPuvodni.contains(aktivni)
+    ? { id: aktivni.id,
+        s: 'selectionStart' in aktivni ? aktivni.selectionStart : null,
+        e: 'selectionEnd'   in aktivni ? aktivni.selectionEnd   : null }
+    : null;
 
   let obsah;
   if (!S.user) {
@@ -1347,6 +1355,13 @@ function vykresli() {
   if (tab && posunTabule) tab.scrollLeft = posunTabule;
   const det = novy.querySelector('.detail');
   if (det && posunDetail) det.scrollTop = posunDetail;
+  if (fokus) {
+    const znovu = document.getElementById(fokus.id);
+    if (znovu) {
+      znovu.focus();
+      if (fokus.s !== null) { try { znovu.setSelectionRange(fokus.s, fokus.e); } catch { /* nevadí */ } }
+    }
+  }
 }
 
 /* ---------- klávesnice ---------- */
