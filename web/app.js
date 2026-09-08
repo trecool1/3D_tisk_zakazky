@@ -742,9 +742,7 @@ function detailPanel() {
       /* 06 — Konverzace */
       sekce('06 — Konverzace'),
       konverzace(z),
-      muzeMenit() && odpovedni(z),
-
-      historieZakaznikaBlok(z))];
+      muzeMenit() && odpovedni(z))];
 }
 
 function historieZmen(z) {
@@ -773,6 +771,7 @@ function historieZmen(z) {
 function panelFirmy(z) {
   const f = z.firma;
   const hist = z.historieZakaznika || [];
+  const suma = hist.reduce((a, x) => a + x.celkem, 0);
   return h('div', { class: 'panel', style: 'margin-bottom:var(--space-6)' },
     h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2)' },
       h('span', { style: 'font-family:var(--font-heading);font-weight:600;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--teal)' },
@@ -783,11 +782,26 @@ function panelFirmy(z) {
       f && h('button', { class: 'btn btn-ghost', style: 'margin-left:auto;padding:2px 8px',
         onclick: async () => { S.firmaKlic = f.klic; S.open = null; S.detail = null; await prepniPohled('customers'); }
       }, 'Karta firmy')),
-    h('div', { style: 'font-size:15px;color:var(--muted-2);margin-top:var(--space-1)' },
-      hist.length
-        ? hist.length + '× u nás tiskl · dohromady ' + kc(hist.reduce((a, x) => a + x.celkem, 0))
-          + ' · naposledy ' + dm(hist[0].termin) + ' — přehled dole'
-        : 'Nový zákazník — pod touto firmou u nás dosud nic netiskl.'));
+
+    hist.length === 0
+      ? h('div', { style: 'font-size:15px;color:var(--muted-2);margin-top:var(--space-1)' },
+          'Nový zákazník — pod touto firmou u nás dosud nic netiskl.')
+      : h('div', { style: 'margin-top:var(--space-2)' },
+          h('button', {
+            style: 'background:none;border:0;padding:0;cursor:pointer;font-size:15px;color:var(--teal-700);text-align:left',
+            onclick: () => { S.histZakOpen = !S.histZakOpen; vykresli(); },
+          }, (S.histZakOpen ? '▾ ' : '▸ ') + hist.length + '× u nás tiskl · dohromady ' + kc(suma)
+             + ' · naposledy ' + dm(hist[0].termin)),
+          S.histZakOpen && h('div', { class: 'scroll-x', style: 'margin-top:var(--space-2)' },
+            h('table', { class: 'table', style: 'width:100%;min-width:520px' },
+              h('thead', {}, h('tr', {}, h('th', {}, 'Zakázka'), h('th', {}, 'Co jsme tiskli'),
+                h('th', {}, 'Termín'), h('th', { style: 'text-align:right' }, 'Cena'), h('th', {}, 'Stav'))),
+              h('tbody', {}, hist.map(x => h('tr', { style: 'cursor:pointer', onclick: () => otevri(x.cislo) },
+                h('td', { style: 'white-space:nowrap;color:var(--muted)' }, x.cislo),
+                h('td', {}, x.co),
+                h('td', { style: 'white-space:nowrap' }, dm(x.termin)),
+                h('td', { style: 'text-align:right;white-space:nowrap' }, kc(x.celkem)),
+                h('td', {}, nazevSloupce(x.stav))))))));
 }
 
 function kooperace(z, koop) {
@@ -927,31 +941,6 @@ function konverzace(z) {
                 catch (e) { hlas(e); }
               } }, 'Spárováno podle adresy — odpojit'))));
     }));
-}
-
-// Dřívější zakázky téhož zákazníka — sbalený blok dole v detailu.
-function historieZakaznikaBlok(z) {
-  const hist = z.historieZakaznika || [];
-  if (!hist.length) return null;
-  return h('div', { style: 'margin-top:var(--space-6)' },
-    h('button', {
-      style: 'background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--teal);padding:7px 12px;cursor:pointer;font-family:var(--font-heading);font-weight:600;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:var(--teal)',
-      onclick: () => { S.histZakOpen = !S.histZakOpen; vykresli(); },
-    }, 'Dřívější zakázky zákazníka (' + hist.length + ')'),
-    S.histZakOpen && h('div', { style: 'border:1px solid var(--line);border-top:0;padding:var(--space-3) var(--space-4)' },
-      h('div', { style: 'font-size:15px;color:var(--muted-2);margin-bottom:var(--space-2)' },
-        hist.length + '× u nás tiskla · dohromady ' + kc(hist.reduce((a, x) => a + x.celkem, 0))
-        + ' · naposledy ' + dm(hist[0].termin)),
-      h('div', { class: 'scroll-x' },
-        h('table', { class: 'table', style: 'width:100%;min-width:520px' },
-          h('thead', {}, h('tr', {}, h('th', {}, 'Zakázka'), h('th', {}, 'Co jsme tiskli'),
-            h('th', {}, 'Termín'), h('th', { style: 'text-align:right' }, 'Cena'), h('th', {}, 'Stav'))),
-          h('tbody', {}, hist.map(x => h('tr', { style: 'cursor:pointer', onclick: () => otevri(x.cislo) },
-            h('td', { style: 'white-space:nowrap;color:var(--muted)' }, x.cislo),
-            h('td', {}, x.co),
-            h('td', { style: 'white-space:nowrap' }, dm(x.termin)),
-            h('td', { style: 'text-align:right;white-space:nowrap' }, kc(x.celkem)),
-            h('td', {}, nazevSloupce(x.stav)))))))));
 }
 
 function odpovedni(z) {
