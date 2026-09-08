@@ -123,8 +123,10 @@ if ($z) {
     <?php endif; ?>
 
     <div style="font-size:12px;color:var(--muted);margin-top:var(--space-6)">
-      Dotazy pište na <a href="mailto:<?= $h(replyTo((string)$z['cislo'])) ?>"><?= $h(cfg('mailFrom')) ?></a>,
-      odpověď se nám sama připojí k zakázce.
+      Dotazy pište na
+      <a href="mailto:<?= $h(cfg('mailFrom')) ?>?subject=<?= $h(rawurlencode('[' . $z['cislo'] . '] ')) ?>"><?= $h(cfg('mailFrom')) ?></a>
+      a do předmětu uveďte <strong><?= $h('[' . $z['cislo'] . ']') ?></strong> — odpověď se nám pak
+      sama připojí k této zakázce.
     </div>
   </div>
 <?php endif; ?>
