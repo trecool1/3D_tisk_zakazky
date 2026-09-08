@@ -449,7 +449,8 @@ function karta(z) {
 
   // jeden štítek stavu, v pevném pořadí důležitosti
   let znacka = null;
-  if (z.modelyChybi)        znacka = ['modely chybí', 'var(--red-100)', 'var(--red)'];
+  if (z.schvalilZakaznik)   znacka = ['✓ zákazník schválil nabídku', 'var(--teal)', '#fff'];
+  else if (z.modelyChybi)   znacka = ['modely chybí', 'var(--red-100)', 'var(--red)'];
   else if (z.nedorucitelny) znacka = ['e-mail se nedoručil', 'var(--red-100)', 'var(--red)'];
   else if (z.cekaDnu >= (S.nastaveni.dnyBezOdpovedi || 5))
     znacka = ['čeká na odpověď — ' + dny(z.cekaDnu), 'var(--teal-100)', 'var(--teal-700)'];

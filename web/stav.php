@@ -23,9 +23,15 @@ if (!$z) {
   $z = null;
 } elseif (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['akce'] ?? '') === 'schvalit'
           && $z['stav'] === 'nabidka') {
-  // klik zákazníka posune kartu do Schváleno a zapíše to do konverzace
+  // klik zákazníka posune kartu do Schváleno a zapíše to do konverzace.
+  // Zápis jako NEPŘEČTENÁ příchozí zpráva → karta má na tabuli červenou tečku
+  // a počítá se do „nepřečtených", aby si toho dílna všimla.
   db()->prepare('UPDATE zakazky SET stav = "schvaleno", zmeneno = ? WHERE id = ?')->execute([ted(), (int)$z['id']]);
-  systemovyZaznam((int)$z['id'], 'Zákazník schválil nabídku na stavové stránce');
+  db()->prepare('INSERT INTO zpravy (zakazka_id, typ, od, predmet, telo, parovani, precteno, kdy)
+                 VALUES (?,"prichozi",?,?,?,?,0,?)')
+      ->execute([(int)$z['id'], (string)$z['zak_email'], 'Schválení nabídky [' . $z['cislo'] . ']',
+                 'Zákazník schválil nabídku na stavové stránce. Karta je ve stavu Schváleno.',
+                 'schválení na stavové stránce', ted()]);
   historieZapis((int)$z['id'], 'Zákazník schválil nabídku na stavové stránce', null, 'zákazník');
   upozorniDilnu('Nabídka schválena ' . $z['cislo'],
     'Zákazník schválil nabídku na zakázce ' . $z['cislo'] . '. Karta je ve stavu Schváleno.');
