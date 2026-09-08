@@ -383,11 +383,20 @@ function prekresliTabuli() {
   // překreslení jen tabule, aby hledání nepřišlo o kurzor v poli
   const stary = $('#tabule');
   if (!stary) { vykresli(); return; }
+  const posun = stary.scrollLeft;
   const novy = tabuleEl(S.zakazky.filter(projde));
-  novy.scrollLeft = stary.scrollLeft;
   stary.replaceWith(novy);
+  novy.scrollLeft = posun;            // až po vložení do DOM, jinak se ořízne na 0
   const pruh = document.querySelector('.pruh-filtru');
   if (maFiltry() !== !!pruh) vykresli();
+}
+
+// Zvýraznění cílového sloupce při přetahování — jen přehození CSS třídy,
+// bez překreslení tabule (to by při autoscrollu způsobovalo cukání).
+function oznacSloupce() {
+  document.querySelectorAll('#tabule .sloupec').forEach(el => {
+    el.classList.toggle('nad', el.dataset.klic === S.dragOver);
+  });
 }
 
 function sloupec(c, filtrovane) {
@@ -398,12 +407,14 @@ function sloupec(c, filtrovane) {
 
   return h('section', {
       class: 'sloupec' + (S.dragOver === c.klic ? ' nad' : ''),
+      'data-klic': c.klic,
       style: 'width:' + sirka,
       ondragover: e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-        if (S.dragOver !== c.klic) { S.dragOver = c.klic; prekresliTabuli(); } },
-      ondragenter: e => { e.preventDefault(); S.dragOver = c.klic; },
+        if (S.dragOver !== c.klic) { S.dragOver = c.klic; oznacSloupce(); } },
+      ondragenter: e => { e.preventDefault();
+        if (S.dragOver !== c.klic) { S.dragOver = c.klic; oznacSloupce(); } },
       ondragleave: e => { if (e.currentTarget.contains(e.relatedTarget)) return;
-        if (S.dragOver === c.klic) { S.dragOver = null; prekresliTabuli(); } },
+        if (S.dragOver === c.klic) { S.dragOver = null; oznacSloupce(); } },
       ondrop: e => { e.preventDefault(); const src = S.drag;
         S.drag = null; S.dragOver = null;
         if (src) presun(src, c.klic); else prekresliTabuli(); },
