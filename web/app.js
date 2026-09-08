@@ -179,7 +179,7 @@ function obrazovkaPrihlaseni() {
     h('div', { style: 'flex:1;display:flex;align-items:center;justify-content:center;padding:var(--space-8)' },
       h('div', { style: 'width:min(420px,100%)' },
         h('div', { class: 'wordmark', style: 'margin-bottom:var(--space-6)' },
-          h('span', { class: 'cadmia' }, 'CADMIA'), h('span', { class: 'kostka' }, '3D')),
+          h('img', { class: 'logo', src: 'logo.svg', alt: 'Cadmia3D', style: 'height:36px' })),
         h('h3', { style: 'margin:0 0 var(--space-1)' }, 'Zakázky — přihlášení'),
         h('p', { style: 'font-size:15px;color:var(--muted-2);margin:0 0 var(--space-5)' },
           'Interní nástroj dílny. Veřejně dostupná je jen stavová stránka s tokenem a endpoint kalkulátoru.'),
@@ -232,8 +232,7 @@ function hlavicka() {
 
   return h('header', { class: 'hlavicka' },
     h('div', { class: 'wordmark' },
-      h('span', { class: 'cadmia' }, 'CADMIA'),
-      h('span', { class: 'kostka' }, '3D'),
+      h('img', { class: 'logo', src: 'logo.svg', alt: 'Cadmia3D' }),
       h('span', { class: 'sekce' }, 'Zakázky')),
 
     h('nav', { class: 'navigace' }, pohledy.map(([k, label]) => h('button', {
