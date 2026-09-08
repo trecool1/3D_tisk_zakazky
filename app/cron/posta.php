@@ -9,14 +9,14 @@ require KANBAN_APP . '/lib/mail.php';
 require KANBAN_APP . '/lib/imap.php';
 
 $s = nactiPostu();
-zaloguj(sprintf('CRON pošta: načteno %d, přiřazeno %d, nezařazeno %d, nových karet %d, automatů %d%s',
-  $s['nactenych'], $s['prirazenych'], $s['nezarazenych'], $s['novych'], $s['automatu'],
+zaloguj(sprintf('CRON pošta: načteno %d, přiřazeno %d, nezařazeno %d, automatů %d%s',
+  $s['nactenych'], $s['prirazenych'], $s['nezarazenych'], $s['automatu'],
   $s['chyba'] !== '' ? ' · CHYBA: ' . $s['chyba'] : ''));
 
 // upozornění dílně na nové zprávy — souhrn, ne zpráva za každou drobnost
-if ($s['prirazenych'] + $s['novych'] > 0) {
-  upozorniDilnu('Nové zprávy k zakázkám (' . ($s['prirazenych'] + $s['novych']) . ')',
-    "Ve schránce přibyly zprávy k zakázkám.\n"
-    . "Přiřazeno: {$s['prirazenych']}\nNové karty: {$s['novych']}\nNezařazeno: {$s['nezarazenych']}\n");
+if ($s['prirazenych'] + $s['nezarazenych'] > 0) {
+  upozorniDilnu('Nové zprávy ve schránce (' . ($s['prirazenych'] + $s['nezarazenych']) . ')',
+    "Přiřazeno k zakázkám: {$s['prirazenych']}\n"
+    . "Čeká v Nezařazeno (rozhodni ručně): {$s['nezarazenych']}\n");
 }
 echo "posta: " . jsonEnk($s) . "\n";

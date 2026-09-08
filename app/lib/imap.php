@@ -91,7 +91,7 @@ function sparujZpravu(array $m): array {
 /* ---------- zpracování schránky ---------- */
 
 function nactiPostu(): array {
-  $stat = ['nactenych' => 0, 'prirazenych' => 0, 'nezarazenych' => 0, 'novych' => 0, 'automatu' => 0, 'chyba' => ''];
+  $stat = ['nactenych' => 0, 'prirazenych' => 0, 'nezarazenych' => 0, 'automatu' => 0, 'chyba' => ''];
 
   if (!imapDostupny()) { $stat['chyba'] = 'Rozšíření php-imap není nainstalováno.'; return $stat; }
   $mbox = imapPripoj();
@@ -127,14 +127,12 @@ function nactiPostu(): array {
     if ($z) {
       ulozPrichozi($z, $m, $parovani);
       $stat['prirazenych']++;
-    } elseif ($duvod === 'neznámý odesílatel') {
-      $z = zalozZEmailu($m);
-      ulozPrichozi($z, $m, 'nová karta z e-mailu');
-      $stat['novych']++;
     } else {
+      // Co se nepodařilo spolehlivě spárovat (včetně neznámého odesílatele) jde
+      // do Nezařazeno — kartu založí až člověk, aby spam nezaplevelil tabuli.
       db()->prepare('INSERT INTO nezarazeno (od, predmet, telo, kdy, duvod, message_id, in_reply_to, refs)
                      VALUES (?,?,?,?,?,?,?,?)')
-          ->execute([$m['from'], $m['subject'], $m['telo'], $m['kdy'], $duvod,
+          ->execute([$m['from'], $m['subject'], $m['telo'], $m['kdy'], $duvod ?: 'neznámý odesílatel',
                      $m['message_id'], $m['in_reply_to'], $m['references']]);
       $stat['nezarazenych']++;
     }
@@ -153,24 +151,6 @@ function ulozPrichozi(array $z, array $m, string $parovani): void {
       ->execute([(int)$z['id'], $m['from'], $m['to'], $m['subject'], $m['telo'], $m['telo_html'],
                  $m['message_id'], $m['in_reply_to'], $m['references'], $parovani, $m['kdy']]);
   db()->prepare('UPDATE zakazky SET zmeneno = ? WHERE id = ?')->execute([ted(), (int)$z['id']]);
-}
-
-function zalozZEmailu(array $m): array {
-  $zak = ['jmeno' => $m['from_name'] !== '' ? $m['from_name'] : $m['from_email'],
-          'firma' => '', 'email' => $m['from_email'], 'telefon' => '', 'ico' => ''];
-  $cislo = dalsiCislo();
-  db()->prepare(
-    'INSERT INTO zakazky (cislo, stav, termin, firma_id, zak_jmeno, zak_email, poznamka_zak,
-                          konfigurace, kalkulace, hodiny_manipulace, modely_chybi, zdroj, token, vytvoreno, zmeneno)
-     VALUES (?,"nova",?,?,?,?,?,?,?,?,1,"email",?,?,?)')
-    ->execute([$cislo, date('Y-m-d', strtotime('+14 days')), firmaZajisti($zak),
-               $zak['jmeno'], $zak['email'], mb_substr($m['telo'], 0, 2000),
-               jsonEnk(['tech' => '', 'material' => '', 'dokonceni' => []]),
-               jsonEnk(['net' => 0, 'dph' => 0, 'celkem' => 0]),
-               (float)(pricing()['handlingHours'] ?? 2), nahodnyToken(24), ted(), ted()]);
-  $z = zakazkaPodleCisla($cislo);
-  historieZapis((int)$z['id'], 'Karta založena z e-mailu', null, 'systém');
-  return $z;
 }
 
 /* ---------- čtení jedné zprávy ---------- */
