@@ -75,7 +75,7 @@ const S = {
   hledani: '', fKdo: '', fTech: '', fPrio: '', fNeprectene: false, fPoTerminu: false, fExterni: false,
   fStav: '', razeni: 'termin',
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
-  smazPriloha: null, dropAktivni: false,
+  smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false,
   firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
   nastaveniData: null, pubCislo: null, kopirovano: false,
   chyba: '', nacitam: false,
@@ -542,7 +542,7 @@ async function otevri(cislo) {
   try {
     S.open = cislo; S.sel = cislo;
     Object.assign(S, { draft: '', prebitCena: '', prebitDuvod: '', rezim: 'odpoved', histOpen: false,
-      smazPriloha: null, dropAktivni: false });
+      smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false });
     S.detail = (await api('detail', { cislo })).zakazka;
     await nactiStav();
     vykresli();
@@ -742,7 +742,9 @@ function detailPanel() {
       /* 06 — Konverzace */
       sekce('06 — Konverzace'),
       konverzace(z),
-      muzeMenit() && odpovedni(z))];
+      muzeMenit() && odpovedni(z),
+
+      historieZakaznikaBlok(z))];
 }
 
 function historieZmen(z) {
@@ -772,7 +774,7 @@ function panelFirmy(z) {
   const f = z.firma;
   const hist = z.historieZakaznika || [];
   return h('div', { class: 'panel', style: 'margin-bottom:var(--space-6)' },
-    h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2);margin-bottom:var(--space-2)' },
+    h('div', { style: 'display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2)' },
       h('span', { style: 'font-family:var(--font-heading);font-weight:600;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--teal)' },
         f ? f.nazev : z.zakaznik),
       h('span', { style: 'font-size:14px;color:var(--muted-2)' },
@@ -781,27 +783,11 @@ function panelFirmy(z) {
       f && h('button', { class: 'btn btn-ghost', style: 'margin-left:auto;padding:2px 8px',
         onclick: async () => { S.firmaKlic = f.klic; S.open = null; S.detail = null; await prepniPohled('customers'); }
       }, 'Karta firmy')),
-
-    hist.length
-      ? h('div', {},
-          h('div', { style: 'font-size:16px;margin-bottom:var(--space-2)' },
-            hist.length + '× u nás tiskla · dohromady ' + kc(hist.reduce((a, x) => a + x.celkem, 0))
-            + ' · naposledy ' + dm(hist[0].termin)),
-          h('div', { class: 'scroll-x' },
-            h('table', { class: 'table', style: 'width:100%;min-width:520px' },
-              h('thead', {}, h('tr', {}, h('th', {}, 'Zakázka'), h('th', {}, 'Co jsme tiskli'),
-                h('th', {}, 'Termín'), h('th', { style: 'text-align:right' }, 'Cena'), h('th', {}, 'Stav'))),
-              h('tbody', {}, hist.map(x => h('tr', { style: 'cursor:pointer', onclick: () => otevri(x.cislo) },
-                h('td', { style: 'white-space:nowrap;color:var(--muted)' }, x.cislo),
-                h('td', {}, x.co),
-                h('td', { style: 'white-space:nowrap' }, dm(x.termin)),
-                h('td', { style: 'text-align:right;white-space:nowrap' }, kc(x.celkem)),
-                h('td', {}, nazevSloupce(x.stav))))))))
-      : h('div', { style: 'font-size:16px;color:var(--muted-2)' },
-          'Nový zákazník — pod touto firmou u nás dosud nic netiskl.'),
-
-    h('div', { style: 'font-size:14px;color:var(--muted);margin-top:var(--space-2)' },
-      'Kontakt se páruje podle e-mailu, firma podle IČO (jinak podle názvu nebo domény) — poptávky od různých lidí jedné firmy se sčítají do jedné karty firmy.'));
+    h('div', { style: 'font-size:15px;color:var(--muted-2);margin-top:var(--space-1)' },
+      hist.length
+        ? hist.length + '× u nás tiskl · dohromady ' + kc(hist.reduce((a, x) => a + x.celkem, 0))
+          + ' · naposledy ' + dm(hist[0].termin) + ' — přehled dole'
+        : 'Nový zákazník — pod touto firmou u nás dosud nic netiskl.'));
 }
 
 function kooperace(z, koop) {
@@ -885,29 +871,87 @@ function modelyPrilohy(z) {
         'nebo přetažením sem — tiskové podklady, faktury od partnerů, doklady, fotky (do 200 MB)')));
 }
 
+// Ořízne citaci předchozího mailu (řádky „> …", hlavičky typu „Dne … napsal(a):",
+// „-----Původní zpráva-----", outlookový podtržítkový oddělovač). Vrací zkrácený text.
+function orizniCitaci(telo) {
+  const radky = String(telo).replace(/\r\n/g, '\n').split('\n');
+  const marker = r =>
+    /^\s*>/.test(r) ||
+    /^\s*(Dne|On)\b.*(napsal|napsala|napsal\(a\)|wrote)\s*:?\s*$/i.test(r) ||
+    /napsal\(a\):\s*$/i.test(r) ||
+    /^\s*-{2,}\s*(Původní zpráva|Original Message|Forwarded message|Přeposlaná zpráva)/i.test(r) ||
+    /^_{10,}\s*$/.test(r) ||
+    /^\s*(Od|From)\s*:\s*.+<.+@.+>/.test(r);
+  let i = radky.findIndex(marker);
+  if (i <= 0) return String(telo).replace(/\n{3,}/g, '\n\n').trimEnd();
+  return radky.slice(0, i).join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+}
+
 function konverzace(z) {
-  const tag = { prichozi: 'zákazník', odchozi: 'naše odpověď', interni: 'interní' };
-  return h('div', { style: 'display:flex;flex-direction:column;gap:var(--space-3);margin-bottom:var(--space-4)' },
-    z.zpravy.map(m => m.typ === 'system'
-      ? h('div', { style: 'font-size:13px;color:var(--muted)' }, m.telo + ' — ' + dt(m.kdy))
-      : h('div', { style: 'background:' + (m.typ === 'interni' ? 'var(--red-100)' : 'var(--panel)')
-          + ';padding:var(--space-3);border-radius:var(--radius-md)' },
-          h('div', { style: 'display:flex;align-items:baseline;gap:var(--space-2);font-size:13px;color:var(--muted-2);margin-bottom:4px' },
-            h('span', { style: 'color:' + (m.typ === 'interni' ? 'var(--red)'
-              : m.typ === 'odchozi' ? 'var(--teal-700)' : 'var(--ink)') }, tag[m.typ] || ''),
-            h('span', {}, m.od || ''),
-            h('span', { style: 'margin-left:auto' }, dt(m.kdy))),
-          m.typ === 'prichozi' && m.parovani === 'přiřazeno automaticky podle adresy' && h('div', {
-              style: 'display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);font-size:13px;color:var(--teal-700);margin-bottom:4px' },
-            h('span', {}, 'Přiřazeno automaticky podle e-mailové adresy odesílatele.'),
-            muzeMenit() && h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px',
+  const tag = { prichozi: 'zákazník', odchozi: 'my', interni: 'interní' };
+  return h('div', { style: 'display:flex;flex-direction:column;gap:var(--space-2);margin-bottom:var(--space-4)' },
+    z.zpravy.length === 0 && h('div', { style: 'font-size:14px;color:var(--muted)' }, 'Zatím žádná zpráva.'),
+    z.zpravy.map(m => {
+      if (m.typ === 'system') return h('div', {
+        style: 'align-self:center;font-size:12px;color:var(--muted);text-align:center;padding:2px var(--space-3)' },
+        m.telo + ' — ' + dt(m.kdy));
+
+      const nase = m.typ === 'odchozi';
+      const interni = m.typ === 'interni';
+      const plny = !!S.citaceZpravy[m.id];
+      const orez = interni ? m.telo : orizniCitaci(m.telo);
+      const jeCitace = !interni && orez !== String(m.telo).replace(/\n{3,}/g, '\n\n').trimEnd();
+      const bg = interni ? 'var(--red-100)' : nase ? 'var(--teal-100)' : 'var(--panel)';
+      const fg = interni ? 'var(--red)' : nase ? 'var(--teal-700)' : 'var(--ink)';
+      const autoAdresa = m.typ === 'prichozi' && m.parovani === 'přiřazeno automaticky podle adresy';
+
+      return h('div', { style: 'align-self:' + (nase ? 'flex-end' : interni ? 'stretch' : 'flex-start')
+          + ';max-width:' + (interni ? '100%' : '80%') + ';min-width:0' },
+        h('div', { style: 'background:' + bg + ';border-radius:12px;padding:var(--space-2) var(--space-3)'
+            + (nase ? ';border-bottom-right-radius:3px' : interni ? '' : ';border-bottom-left-radius:3px') },
+          h('div', { style: 'display:flex;align-items:baseline;gap:var(--space-2);font-size:12px;color:var(--muted-2);margin-bottom:3px' },
+            h('span', { style: 'color:' + fg + ';font-weight:600' }, tag[m.typ] || ''),
+            m.od && h('span', { style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, m.od),
+            h('span', { style: 'margin-left:auto;white-space:nowrap' }, dt(m.kdy))),
+          h('div', { style: 'font-size:14px;white-space:pre-wrap;word-break:break-word' },
+            plny ? m.telo : orez),
+          jeCitace && h('button', { class: 'btn btn-ghost',
+            style: 'padding:1px 4px;font-size:12px;margin-top:3px;border:0',
+            onclick: () => { S.citaceZpravy = Object.assign({}, S.citaceZpravy, { [m.id]: !plny }); vykresli(); } },
+            plny ? '▴ skrýt citovaný e-mail' : '▾ zobrazit celý e-mail'),
+          autoAdresa && muzeMenit() && h('div', { style: 'margin-top:4px' },
+            h('button', { class: 'btn btn-ghost', style: 'padding:1px 4px;font-size:12px;border:0;color:var(--teal-700)',
               onclick: async () => {
-                if (!confirm('Odpojit tuto zprávu a vrátit ji do Nezařazeno?')) return;
+                if (!confirm('Odpojit tuto zprávu a vrátit ji do Nezařazeno? (spárováno jen podle e-mailové adresy)')) return;
                 try { await api('zprava-odpoj', { cislo: z.cislo, zprava: m.id }); await obnov(); }
                 catch (e) { hlas(e); }
-              } }, 'Odpojit')),
-          h('div', { style: 'font-size:14px;white-space:pre-wrap;max-width:66ch' }, m.telo))),
-    z.zpravy.length === 0 && h('div', { style: 'font-size:14px;color:var(--muted)' }, 'Zatím žádná zpráva.'));
+              } }, 'Spárováno podle adresy — odpojit'))));
+    }));
+}
+
+// Dřívější zakázky téhož zákazníka — sbalený blok dole v detailu.
+function historieZakaznikaBlok(z) {
+  const hist = z.historieZakaznika || [];
+  if (!hist.length) return null;
+  return h('div', { style: 'margin-top:var(--space-6)' },
+    h('button', {
+      style: 'background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--teal);padding:7px 12px;cursor:pointer;font-family:var(--font-heading);font-weight:600;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:var(--teal)',
+      onclick: () => { S.histZakOpen = !S.histZakOpen; vykresli(); },
+    }, 'Dřívější zakázky zákazníka (' + hist.length + ')'),
+    S.histZakOpen && h('div', { style: 'border:1px solid var(--line);border-top:0;padding:var(--space-3) var(--space-4)' },
+      h('div', { style: 'font-size:15px;color:var(--muted-2);margin-bottom:var(--space-2)' },
+        hist.length + '× u nás tiskla · dohromady ' + kc(hist.reduce((a, x) => a + x.celkem, 0))
+        + ' · naposledy ' + dm(hist[0].termin)),
+      h('div', { class: 'scroll-x' },
+        h('table', { class: 'table', style: 'width:100%;min-width:520px' },
+          h('thead', {}, h('tr', {}, h('th', {}, 'Zakázka'), h('th', {}, 'Co jsme tiskli'),
+            h('th', {}, 'Termín'), h('th', { style: 'text-align:right' }, 'Cena'), h('th', {}, 'Stav'))),
+          h('tbody', {}, hist.map(x => h('tr', { style: 'cursor:pointer', onclick: () => otevri(x.cislo) },
+            h('td', { style: 'white-space:nowrap;color:var(--muted)' }, x.cislo),
+            h('td', {}, x.co),
+            h('td', { style: 'white-space:nowrap' }, dm(x.termin)),
+            h('td', { style: 'text-align:right;white-space:nowrap' }, kc(x.celkem)),
+            h('td', {}, nazevSloupce(x.stav)))))))));
 }
 
 function odpovedni(z) {

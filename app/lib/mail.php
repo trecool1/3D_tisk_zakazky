@@ -115,10 +115,25 @@ function odesliZakaznikovi(array $z, string $predmet, string $telo): array {
   $predmet = predmetSCislem($predmet !== '' ? $predmet : 'Zakázka', $cislo);
   $mid     = '<' . messageId($cislo) . '>';
 
-  [$ok, $mid, $chyba] = posliMail($komu, $predmet, $telo, [
-    'Reply-To'   => replyTo($cislo),
-    'Message-ID' => $mid,
-  ]);
+  // Navázat na POSLEDNÍ příchozí zprávu zákazníka, ať se odpověď v jeho klientovi
+  // zařadí pod jeho poslední dotaz, ne pod původní poptávku.
+  $qP = db()->prepare('SELECT message_id FROM zpravy
+                        WHERE zakazka_id = ? AND typ = "prichozi" AND message_id <> ""
+                        ORDER BY kdy DESC, id DESC LIMIT 1');
+  $qP->execute([(int)$z['id']]);
+  $posledniPrichozi = (string)$qP->fetchColumn();
+
+  $qV = db()->prepare('SELECT message_id FROM zpravy
+                        WHERE zakazka_id = ? AND message_id <> "" ORDER BY kdy, id');
+  $qV->execute([(int)$z['id']]);
+  $references = implode(' ', array_map(
+    fn($v) => '<' . trim((string)$v, '<>') . '>', array_column($qV->fetchAll(), 'message_id')));
+
+  $hlavicky = ['Reply-To' => replyTo($cislo), 'Message-ID' => $mid];
+  if ($posledniPrichozi !== '') $hlavicky['In-Reply-To'] = '<' . trim($posledniPrichozi, '<>') . '>';
+  if ($references !== '')       $hlavicky['References']   = $references;
+
+  [$ok, $mid, $chyba] = posliMail($komu, $predmet, $telo, $hlavicky);
 
   db()->prepare('INSERT INTO zpravy (zakazka_id, typ, od, komu, predmet, telo, message_id, parovani, precteno, kdy)
                  VALUES (?,"odchozi",?,?,?,?,?,?,1,?)')
