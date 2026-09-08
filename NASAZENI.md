@@ -53,7 +53,7 @@ posílá KAŽDOU poptávku na `pokusss74@seznam.cz` (text + PDF nabídka + JSON 
 mail jako doteď.
 
 Kanban k tomu jede navíc v režimu **pull**: cron `import-kalkulator.php --bez-mailu`
-každých 10 min čte `objednavky.json` a zakládá karty. `--bez-mailu` je tam schválně,
+každou minutu čte `objednavky.json` a zakládá karty. `--bez-mailu` je tam schválně,
 aby kanban neposílal svoje vlastní potvrzení a upozornění dílně (jinak by chodila
 dvakrát — jednou z kalkulátoru, podruhé z kanbanu).
 
@@ -112,8 +112,8 @@ sudo bash ~/kanban-stage/nasazeni/go-live.sh
    ale `cron/posta.php` si vyzkoušej ručně: `php /var/www/kanban-app/cron/posta.php`.
 
 5. **cron** (jako `cadmia`) — `crontab ~/kanban-stage/nasazeni/crontab.txt`
-   (nahradí celý crontab; `crontab -l` na kontrolu). Nasazuje: pull import každých
-   10 min (`--bez-mailu`), ranní přehled, noční zálohu. `posta.php` (IMAP) je
+   (nahradí celý crontab; `crontab -l` na kontrolu). Nasazuje: pull import
+   každou minutu (`--bez-mailu`), ranní přehled, noční zálohu. `posta.php` (IMAP) je
    **zakomentovaný** — zapnout až bude samostatná schránka jen pro zakázky, jinak
    cron čte a označuje jako přečtené i upozornění z kalkulátoru na téže adrese.
 
