@@ -36,6 +36,11 @@ function frontaStroje(int $strojId): array {
   foreach ($q->fetchAll() as $u) {
     $hodin = (float)$u['odhad_hodin_tisk'] + (float)$u['odhad_hodin_chladnuti'];
     $kumulativne += $hodin;
+    $postup = null;
+    if ($u['stav'] === 'tiskne' && $u['zahajeno']) {
+      $ubehlo = (time() - (new DateTimeImmutable($u['zahajeno']))->getTimestamp()) / 3600;
+      $postup = $hodin > 0 ? (int)round(min(100, max(0, $ubehlo / $hodin * 100))) : 100;
+    }
     $out[] = [
       'id'              => (int)$u['id'],
       'material'        => $u['material'],
@@ -47,6 +52,7 @@ function frontaStroje(int $strojId): array {
       'hodinChladnuti'  => (float)$u['odhad_hodin_chladnuti'],
       'kumulativneHodin'=> round($kumulativne, 1),
       'hotovoNejdrive'  => $ted->modify('+' . (int)round($kumulativne * 3600) . ' seconds')->format('Y-m-d H:i:s'),
+      'postup'          => $postup,
       'dily'            => ulohaDilySouhrn((int)$u['id']),
       'zakazky'         => ulohaZakazky((int)$u['id']),
     ];
@@ -223,12 +229,36 @@ function polozkyKPotisku(): array {
 }
 
 /**
- * Automatický návrh, jak rozdělit čekající díly na konkrétní stroje — program
- * navrhne, obsluha jen doladí (přesune návrh na jiný stroj stejného typu, nebo
- * ho rovnou potvrdí). Rozděluje hladově: díly (FIFO podle data zakázky) postupně
- * padají na stroj, který má v tu chvíli (včetně už rozdaných návrhů) nejmíň
- * hodin ve frontě — tím se vytíží rovnoměrně všechny kusy dané tiskárny, ne
- * jen ten první. Expres se nenavrhuje, ten jde vlastní cestou hned automaticky.
+ * Nepřiřazené díly seskupené podle zakázky (ne podle modelu) — pro plánovací
+ * pracovní plochu, kde obsluha díl chytne a přetáhne na konkrétní stroj.
+ * Expresní díly se nenabízí, ty jdou vlastní cestou hned automaticky.
+ */
+function nepridelenaFronta(): array {
+  $poZakazce = [];
+  foreach (polozkyKPotisku() as $p) {
+    if (jeExpres($p['rychlost'])) continue;
+    $zid = (int)$p['zakazka_id'];
+    if (!isset($poZakazce[$zid])) {
+      $poZakazce[$zid] = ['cislo' => $p['zakazka_cislo'], 'vytvoreno' => $p['zakazka_vytvoreno'], 'polozky' => []];
+    }
+    $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
+    $poZakazce[$zid]['polozky'][] = [
+      'id' => (int)$p['id'], 'nazev' => $p['nazev'], 'material' => $p['material'],
+      'tiskarnaNazev' => $p['tiskarna_nazev'], 'tiskarnaId' => $t ? (int)$t['id'] : null,
+      'pocet' => (int)$p['zbyva'], 'perjob' => max(1, (int)$p['perjob']),
+    ];
+  }
+  usort($poZakazce, fn($a, $b) => $a['vytvoreno'] <=> $b['vytvoreno']);
+  return array_values($poZakazce);
+}
+
+/**
+ * Automatický návrh, jak rozdělit čekající díly na konkrétní stroje — vstup pro
+ * "Automatický návrh pro vše" na plánovací ploše (obsluha ho pak ještě doladí
+ * přetažením, než potvrdí). Rozděluje hladově: díly (FIFO podle data zakázky)
+ * postupně padají na stroj, který má v tu chvíli (včetně už rozdaných návrhů)
+ * nejmíň hodin ve frontě — tím se vytíží rovnoměrně všechny kusy dané tiskárny,
+ * ne jen ten první.
  */
 function navrhDavek(): array {
   $skupiny = [];
@@ -268,14 +298,14 @@ function navrhDavek(): array {
     }
 
     foreach ($naStroji as $strojId => $polozky) {
-      $dily = [];
-      foreach ($polozky as $p) $dily[$p['nazev']] = ($dily[$p['nazev']] ?? 0) + (int)$p['zbyva'];
       $navrhy[] = [
-        'tiskarnaId'  => $s['tiskarnaId'], 'tiskarna' => $s['tiskarna'], 'material' => $s['material'],
-        'strojId'     => (int)$strojId,
-        'polozkaIds'  => array_map(fn($p) => (int)$p['id'], $polozky),
-        'dily'        => array_map(fn($n, $c) => ['nazev' => $n, 'pocet' => $c], array_keys($dily), array_values($dily)),
-        'zakazky'     => array_values(array_unique(array_map(fn($p) => $p['zakazka_cislo'], $polozky))),
+        'tiskarnaId' => $s['tiskarnaId'], 'tiskarna' => $s['tiskarna'], 'material' => $s['material'],
+        'strojId'    => (int)$strojId,
+        'polozky'    => array_map(fn($p) => [
+          'id' => (int)$p['id'], 'nazev' => $p['nazev'], 'pocet' => (int)$p['zbyva'], 'perjob' => max(1, (int)$p['perjob']),
+          'zakazkaCislo' => $p['zakazka_cislo'],
+        ], $polozky),
+        'zakazky'    => array_values(array_unique(array_map(fn($p) => $p['zakazka_cislo'], $polozky))),
       ];
     }
   }
@@ -283,24 +313,29 @@ function navrhDavek(): array {
   return ['navrhy' => $navrhy, 'nesparovaneTiskarny' => $nesparovano];
 }
 
-/** Potvrzení návrhu — založí úlohu přesně z dodaných dílů (obsluha mohla mezitím přesunout na jiný stroj). */
-function navrhPotvrdit(int $tiskarnaId, string $material, int $strojId, array $polozkaIds): ?int {
+/** Potvrzení návrhu/úlohy z plánovací plochy — $polozky = [{id, pocet}], capped na skutečně zbývající množství. */
+function ulohaZalozZAlokace(int $tiskarnaId, string $material, int $strojId, array $polozky): ?int {
   $s = db()->prepare('SELECT id FROM stroje WHERE id = ? AND tiskarna_id = ? AND aktivni = 1');
   $s->execute([$strojId, $tiskarnaId]);
   if (!$s->fetchColumn()) return null;
-  if (!$polozkaIds) return null;
+  if (!$polozky) return null;
 
-  $placeholders = implode(',', array_fill(0, count($polozkaIds), '?'));
+  $ids = array_map(fn($x) => (int)($x['id'] ?? 0), $polozky);
+  $chteji = [];
+  foreach ($polozky as $x) $chteji[(int)($x['id'] ?? 0)] = max(0, (int)($x['pocet'] ?? 0));
+
+  $placeholders = implode(',', array_fill(0, count($ids), '?'));
   $q = db()->prepare(
     "SELECT p.*, COALESCE((SELECT SUM(up.pocet) FROM uloha_polozky up WHERE up.polozka_id = p.id), 0) AS jiz_planovano
        FROM polozky p WHERE p.id IN ($placeholders)");
-  $q->execute($polozkaIds);
+  $q->execute($ids);
 
   $alokace = [];
   foreach ($q->fetchAll() as $p) {
-    $zbyva = (int)$p['pocet'] - (int)$p['jiz_planovano'];
-    if ($zbyva <= 0) continue;
-    $alokace[] = ['polozka' => $p, 'pocet' => $zbyva];
+    $zbyva  = (int)$p['pocet'] - (int)$p['jiz_planovano'];
+    $pocet  = min($chteji[(int)$p['id']] ?? 0, $zbyva);
+    if ($pocet <= 0) continue;
+    $alokace[] = ['polozka' => $p, 'pocet' => $pocet];
   }
   if (!$alokace) return null;
 

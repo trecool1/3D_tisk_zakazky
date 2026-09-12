@@ -498,16 +498,21 @@ try {
       odesliJson(['ok' => true]);
     }
 
+    case 'planovani': {
+      vyzadujPrihlaseni();
+      odesliJson(['ok' => true, 'zakazky' => nepridelenaFronta()]);
+    }
+
     case 'navrh': {
       vyzadujPrihlaseni();
       odesliJson(array_merge(['ok' => true], navrhDavek()));
     }
 
-    case 'navrh-potvrdit': {
+    case 'plan-potvrdit': {
       vyzadujZapis();
-      $id = navrhPotvrdit(
+      $id = ulohaZalozZAlokace(
         (int)($v['tiskarnaId'] ?? 0), (string)($v['material'] ?? ''), (int)($v['strojId'] ?? 0),
-        array_map('intval', (array)($v['polozkaIds'] ?? [])));
+        (array)($v['polozky'] ?? []));
       if (!$id) chyba('Úlohu se nepodařilo založit (mezitím už byly díly naplánované jinam?).', 400);
       odesliJson(['ok' => true, 'ulohaId' => $id]);
     }
