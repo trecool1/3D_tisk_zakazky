@@ -7,6 +7,8 @@ declare(strict_types=1);
 require __DIR__ . '/bootstrap.php';
 require KANBAN_APP . '/lib/auth.php';
 require KANBAN_APP . '/lib/zakazky.php';
+require KANBAN_APP . '/lib/pricing.php';
+require KANBAN_APP . '/lib/tiskarny.php';
 
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit('Jen z příkazové řádky.'); }
 
@@ -66,6 +68,25 @@ if ((int)db()->query('SELECT COUNT(*) FROM uzivatele')->fetchColumn() === 0) {
 } else {
   echo "uživatelé už existují, nechávám beze změny\n";
 }
+
+foreach (pricing()['printers'] ?? [] as $p) {
+  $klic   = (string)($p['klic'] ?? $p['key'] ?? '');
+  if ($klic === '') continue;
+  $inHouse = !array_key_exists('inHouse', $p) || $p['inHouse'] !== false;
+  db()->prepare('INSERT OR IGNORE INTO tiskarny (klic, nazev, tech, materialy, build_x, build_y, build_z,
+                                                  spacing, rate, throughput, in_house, aktivni)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,1)')
+      ->execute([$klic, (string)($p['name'] ?? $klic), (string)($p['tech'] ?? ''),
+                 jsonEnk((array)($p['materials'] ?? [])),
+                 (float)($p['build'][0] ?? 0), (float)($p['build'][1] ?? 0), (float)($p['build'][2] ?? 0),
+                 (float)($p['spacing'] ?? 0), (float)($p['rate'] ?? 0), (float)($p['throughput'] ?? 0),
+                 $inHouse ? 1 : 0]);
+  if (!$inHouse) continue;
+  $tiskarnaId = (int)db()->query('SELECT id FROM tiskarny WHERE klic = ' . db()->quote($klic))->fetchColumn();
+  db()->prepare('INSERT OR IGNORE INTO stroje (tiskarna_id, oznaceni, aktivni) VALUES (?,?,1)')
+      ->execute([$tiskarnaId, $klic . '-1']);
+}
+echo "tiskárny a stroje připraveny\n";
 
 foreach ([cfg('modely'), cfg('zalohy')] as $d) {
   if (!is_dir($d)) { @mkdir($d, 0770, true); echo "vytvořen adresář $d\n"; }

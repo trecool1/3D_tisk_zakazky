@@ -77,7 +77,7 @@ const S = {
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
   smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false,
   firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
-  nastaveniData: null, pubCislo: null, kopirovano: false,
+  nastaveniData: null, tiskarny: [], stroje: [], pubCislo: null, kopirovano: false,
   chyba: '', nacitam: false,
 };
 
@@ -264,7 +264,10 @@ async function prepniPohled(k) {
     if (k === 'customers') { S.firmy = (await api('firmy')).firmy; if (!S.firmaKlic && S.firmy[0]) S.firmaKlic = S.firmy[0].klic; }
     if (k === 'mail')      S.posta = (await api('posta&filtr=' + S.postaFiltr)).posta;
     if (k === 'inbox')     S.nezarazeno = await api('nezarazeno');
-    if (k === 'settings')  S.nastaveniData = await api('nastaveni');
+    if (k === 'settings')  {
+      S.nastaveniData = await api('nastaveni');
+      const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
+    }
     if (k === 'public' && !S.pubCislo && S.zakazky[0]) S.pubCislo = S.zakazky[0].cislo;
   } catch (e) { hlas(e); }
   vykresli();
@@ -1231,6 +1234,39 @@ function obrazovkaNastaveni() {
         ulozSloupce();
       } }, 'Přidat sloupec')),
 
+    /* tiskárny a stroje */
+    h('section', {},
+      h('h3', { style: 'margin:0 0 var(--space-1)' }, 'Tiskárny a stroje'),
+      h('p', { style: 'font-size:14px;color:var(--muted-2);max-width:56ch;margin:0 0 var(--space-3)' },
+        'Typy se přebírají z ceníku kalkulátoru. Zde se spravují jen fyzické kusy pro plánování výroby.'),
+      h('div', { style: 'display:flex;flex-direction:column;gap:var(--space-4)' },
+        S.tiskarny.map(t => h('div', {},
+          h('div', { style: 'display:flex;align-items:center;gap:var(--space-2)' },
+            h('input', { class: 'input', value: t.nazev, style: 'flex:1;min-width:80px;padding:5px 8px',
+              onchange: e => { t.nazev = e.target.value; ulozTiskarnu(t); } }),
+            h('span', { style: 'font-size:12px;color:var(--muted)' }, t.tech + (t.inHouse ? '' : ' · externí')),
+            h('button', { style: 'background:' + (t.aktivni ? 'var(--teal-100)' : 'var(--line)')
+                + ';color:' + (t.aktivni ? 'var(--teal-700)' : 'var(--muted-2)')
+                + ';border:0;border-radius:var(--radius-md);padding:5px 9px;cursor:pointer;font-size:13px',
+              onclick: () => { t.aktivni = !t.aktivni; ulozTiskarnu(t); } }, t.aktivni ? 'aktivní' : 'neaktivní')),
+          h('div', { style: 'display:flex;flex-direction:column;gap:4px;margin:6px 0 0 var(--space-4)' },
+            S.stroje.filter(s => s.tiskarnaId === t.id).map(s => h('div', {
+                style: 'display:flex;align-items:center;gap:var(--space-2)' },
+              h('input', { class: 'input', value: s.oznaceni, style: 'flex:1;max-width:200px;padding:4px 8px;font-size:13px',
+                onchange: e => { s.oznaceni = e.target.value; ulozStroj(s); } }),
+              h('button', { style: 'background:' + (s.aktivni ? 'var(--teal-100)' : 'var(--line)')
+                  + ';color:' + (s.aktivni ? 'var(--teal-700)' : 'var(--muted-2)')
+                  + ';border:0;border-radius:var(--radius-md);padding:3px 8px;cursor:pointer;font-size:12px',
+                onclick: () => { s.aktivni = !s.aktivni; ulozStroj(s); } }, s.aktivni ? 'aktivní' : 'neaktivní'),
+              h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px', onclick: () => smazStroj(s) }, 'smazat'))),
+            !t.inHouse && S.stroje.filter(s => s.tiskarnaId === t.id).length === 0
+              && h('span', { style: 'font-size:13px;color:var(--muted)' }, 'externí kooperace — bez vlastního stroje'),
+            h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:13px;align-self:flex-start', onclick: () => {
+              const oznaceni = prompt('Označení nového stroje:', t.klic + '-' + (S.stroje.filter(s => s.tiskarnaId === t.id).length + 1));
+              if (!oznaceni) return;
+              ulozStroj({ tiskarnaId: t.id, oznaceni });
+            } }, '+ přidat stroj')))))),
+
     /* prahy */
     h('section', {},
       h('h3', { style: 'margin:0 0 var(--space-3)' }, 'Prahy a hlídání'),
@@ -1322,6 +1358,19 @@ function obrazovkaNastaveni() {
 
 async function ulozSloupce() {
   try { await api('sloupce-uloz', { sloupce: S.sloupce }); await nactiStav(); vykresli(); } catch (e) { hlas(e); }
+}
+async function nactiTiskarny() {
+  const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje; vykresli();
+}
+async function ulozTiskarnu(t) {
+  try { await api('tiskarna-uloz', { klic: t.klic, nazev: t.nazev, aktivni: t.aktivni }); await nactiTiskarny(); }
+  catch (e) { hlas(e); }
+}
+async function ulozStroj(s) {
+  try { await api('stroj-uloz', s); await nactiTiskarny(); } catch (e) { hlas(e); }
+}
+async function smazStroj(s) {
+  try { await api('stroj-uloz', { id: s.id, smazat: true }); await nactiTiskarny(); } catch (e) { hlas(e); }
 }
 async function ulozSablonu(klic, predmet, telo) {
   const t = (S.nastaveniData.sablony || []).find(x => x.klic === klic);

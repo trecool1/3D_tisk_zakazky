@@ -8,6 +8,7 @@ require __DIR__ . '/../kanban-app/bootstrap.php';
 require KANBAN_APP . '/lib/auth.php';
 require KANBAN_APP . '/lib/zakazky.php';
 require KANBAN_APP . '/lib/pricing.php';
+require KANBAN_APP . '/lib/tiskarny.php';
 require KANBAN_APP . '/lib/mail.php';
 require KANBAN_APP . '/lib/pohled.php';
 
@@ -440,6 +441,29 @@ try {
     case 'nezarazeno-zahodit': {
       vyzadujZapis();
       db()->prepare('DELETE FROM nezarazeno WHERE id = ?')->execute([(int)($v['id'] ?? 0)]);
+      odesliJson(['ok' => true]);
+    }
+
+    /* ---------- tiskárny a stroje ---------- */
+
+    case 'tiskarny': {
+      vyzadujPrihlaseni();
+      odesliJson(['ok' => true, 'tiskarny' => tiskarnySeznam(), 'stroje' => strojeSeznam()]);
+    }
+
+    case 'tiskarna-uloz': {
+      vyzadujAdmina();
+      tiskarnaUloz($v);
+      odesliJson(['ok' => true]);
+    }
+
+    case 'stroj-uloz': {
+      vyzadujAdmina();
+      if (!empty($v['smazat'])) {
+        strojSmaz((int)($v['id'] ?? 0));
+      } else {
+        strojUloz($v);
+      }
       odesliJson(['ok' => true]);
     }
 

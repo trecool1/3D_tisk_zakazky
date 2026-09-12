@@ -153,6 +153,36 @@ CREATE TABLE IF NOT EXISTS nezarazeno (
   refs       TEXT    NOT NULL DEFAULT ''
 );
 
+-- Registr tiskáren (typ) a strojů (fyzický kus) pro výrobní plánování.
+-- Typy se seedují z pricing.json (viz instaluj.php); stroje spravuje obsluha v Nastavení.
+CREATE TABLE IF NOT EXISTS tiskarny (
+  id         INTEGER PRIMARY KEY,
+  klic       TEXT    NOT NULL UNIQUE,        -- klíč z pricing.json (mk4, xl, sinterit, …)
+  nazev      TEXT    NOT NULL,
+  tech       TEXT    NOT NULL DEFAULT '',    -- FDM | SLS | MJF | RESIN
+  materialy  TEXT    NOT NULL DEFAULT '[]',  -- json pole klíčů materiálů
+  build_x    REAL    NOT NULL DEFAULT 0,
+  build_y    REAL    NOT NULL DEFAULT 0,
+  build_z    REAL    NOT NULL DEFAULT 0,
+  spacing    REAL    NOT NULL DEFAULT 0,
+  rate       REAL    NOT NULL DEFAULT 0,
+  throughput REAL    NOT NULL DEFAULT 0,
+  in_house   INTEGER NOT NULL DEFAULT 1,
+  aktivni    INTEGER NOT NULL DEFAULT 1,
+  vytvoreno  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS stroje (
+  id          INTEGER PRIMARY KEY,
+  tiskarna_id INTEGER NOT NULL REFERENCES tiskarny(id) ON DELETE CASCADE,
+  oznaceni    TEXT    NOT NULL,
+  aktivni     INTEGER NOT NULL DEFAULT 1,
+  poznamka    TEXT    NOT NULL DEFAULT '',
+  vytvoreno   TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (tiskarna_id, oznaceni)
+);
+CREATE INDEX IF NOT EXISTS ix_stroje_tiskarna ON stroje(tiskarna_id);
+
 CREATE TABLE IF NOT EXISTS sloupce (
   id     INTEGER PRIMARY KEY,
   klic   TEXT    NOT NULL UNIQUE,
