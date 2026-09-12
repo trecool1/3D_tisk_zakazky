@@ -268,12 +268,13 @@ async function prepniPohled(k) {
     if (k === 'mail')      S.posta = (await api('posta&filtr=' + S.postaFiltr)).posta;
     if (k === 'inbox')     S.nezarazeno = await api('nezarazeno');
     if (k === 'production' && puvodni !== 'production') {
-      // znovunačtení fronty strojů je vždy bezpečné; rozpracovaný návrh v "Zakázky
-      // a plánování" (S.planPool/S.planJobs) se nesahá — jinak by druhý klik na
-      // VÝROBA v horní liště smazal rozpracovanou práci
+      // znovunačtení fronty strojů je vždy bezpečné; nepřiřazené díly se taky vždy
+      // dotáhnou znovu (jinak by po přesunu zakázky do "Ve frontě na tisk" jinde
+      // zůstal starý, už jednou načtený pool) — jen rozpracovaný návrh (S.planJobs)
+      // se nesahá, ať druhý klik na VÝROBA nesmaže rozpracovanou práci
       S.vyroba = (await api('vyroba')).stroje;
       const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
-      if (S.vyrobaTab === 'planovani' && S.planPool.length === 0 && S.planJobs.length === 0) await nactiPlanovani();
+      if (S.vyrobaTab === 'planovani' && S.planJobs.length === 0) await nactiPlanovani();
     }
     if (k === 'settings')  {
       S.nastaveniData = await api('nastaveni');
@@ -364,6 +365,32 @@ function spustAutoScroll() {
 }
 document.addEventListener('dragend', zastavAutoScroll);
 document.addEventListener('drop', zastavAutoScroll);
+
+// autoscroll celé stránky svisle při přetahování mimo tabuli (např. plánování
+// výroby — přetažení dílu na zařízení dole, fronta úloh u tiskárny) — tam se
+// totiž roluje okno, ne vnitřní kontejner, a bez tohohle kurzor u kraje nic nedělal.
+let _pageScrollTimer = null;
+let _dragY = 0;
+function zastavPageAutoScroll() {
+  if (_pageScrollTimer) { clearInterval(_pageScrollTimer); _pageScrollTimer = null; }
+  _dragY = 0;
+}
+function spustPageAutoScroll() {
+  if (_pageScrollTimer) return;
+  _pageScrollTimer = setInterval(() => {
+    if (!S.drag && !S.dragItem && !S.dragUloha) { zastavPageAutoScroll(); return; }
+    const zona = 80;                  // aktivační pruh od kraje okna
+    if (_dragY && _dragY < zona) window.scrollBy(0, -14);
+    else if (_dragY && _dragY > window.innerHeight - zona) window.scrollBy(0, 14);
+  }, 16);
+}
+document.addEventListener('dragover', e => {
+  if (!S.drag && !S.dragItem && !S.dragUloha) return;
+  _dragY = e.clientY;
+  spustPageAutoScroll();
+});
+document.addEventListener('dragend', zastavPageAutoScroll);
+document.addEventListener('drop', zastavPageAutoScroll);
 
 // Kontejner tabule i s vodorovným rolováním: kolečkem myši a u kraje při přetahování.
 function tabuleEl(filtrovane) {
@@ -1064,8 +1091,11 @@ function obrazovkaVyroba() {
         onclick: async () => {
           const jizNaPlanovani = S.vyrobaTab === 'planovani';
           S.vyrobaTab = 'planovani';
-          // druhý klik na tuhle záložku nesmí smazat rozpracovaný návrh
-          if (!jizNaPlanovani && S.planPool.length === 0 && S.planJobs.length === 0) await nactiPlanovani();
+          // druhý klik na tuhle záložku nesmí smazat rozpracovaný návrh — ale pokud
+          // žádný rozpracovaný návrh není, fronta se má vždy načíst znovu (jinak
+          // se po přesunu zakázky do "Ve frontě na tisk" jinde neobjeví, dokud se
+          // starý, už jednou načtený pool nevyprázdní)
+          if (!jizNaPlanovani && S.planJobs.length === 0) await nactiPlanovani();
           else vykresli();
         } }, 'Zakázky a plánování')),
     S.vyrobaTab === 'prehled' ? prehledTiskarenScreen() : planovaniScreen());
@@ -1161,12 +1191,26 @@ function planPridejDoJobu(job, item, pocet) {
     zakazkaCislo: item.zakazkaCislo, zakaznik: item.zakaznik });
 }
 
+function tiskarnaTech(tiskarnaId) {
+  const t = (S.tiskarny || []).find(x => x.id === tiskarnaId);
+  return t ? t.tech : null;
+}
+
 function planDropNaStroj(strojId) {
   const item = S.dragItem; S.dragItem = null;
   if (!item) return;
   const stroj = S.stroje.find(s => s.id === strojId);
-  if (!stroj || stroj.tiskarnaId !== item.tiskarnaId) { hlas(new Error('Tenhle díl nepatří na tuhle tiskárnu.')); return; }
-  const job = planNajdiNeboZalozJob(item.tiskarnaId, item.tiskarnaNazev, item.material, strojId);
+  if (!stroj) return;
+  const techStroje = tiskarnaTech(stroj.tiskarnaId);
+  const techDilu = tiskarnaTech(item.tiskarnaId);
+  // díl smí na kterýkoli stroj se stejnou technologií (SLS na kterýkoli SLS stroj apod.),
+  // nemusí to být přesně ten model, pro který byla zakázka původně naceněná
+  if (!techStroje || techStroje !== techDilu) {
+    hlas(new Error('Díl je na ' + (techDilu || '?') + ', tenhle stroj je ' + (techStroje || '?') + '.'));
+    return;
+  }
+  const tiskarnaStroje = (S.tiskarny || []).find(t => t.id === stroj.tiskarnaId);
+  const job = planNajdiNeboZalozJob(stroj.tiskarnaId, tiskarnaStroje.nazev, item.material, strojId);
   const vezmi = Math.max(1, Math.min(item.move || item.pocet, item.pocet));
   planPridejDoJobu(job, item, vezmi);
   planOdeberZPoolu(item.id, vezmi);
@@ -1178,8 +1222,8 @@ function planDropNaJob(jobKey) {
   if (!item) return;
   const job = S.planJobs.find(j => j.key === jobKey);
   if (!job) return;
-  if (job.tiskarnaId !== item.tiskarnaId || job.material !== item.material) {
-    hlas(new Error('Úloha už obsahuje jiný materiál/tiskárnu — patří do vlastní úlohy.'));
+  if (tiskarnaTech(job.tiskarnaId) !== tiskarnaTech(item.tiskarnaId) || job.material !== item.material) {
+    hlas(new Error('Úloha už obsahuje jinou technologii nebo materiál — patří do vlastní úlohy.'));
     return;
   }
   const vezmi = Math.max(1, Math.min(item.move || item.pocet, item.pocet));

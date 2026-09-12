@@ -82,7 +82,7 @@ input, select, textarea, button { font-family: var(--font-body); font-size: 15px
 
 /* ---------- kostra ---------- */
 
-.app { min-height: 100vh; max-width: 100%; overflow-x: hidden; overflow-y: visible; background: var(--bg); color: var(--ink);
+.app { min-height: 100vh; max-width: 100%; background: var(--bg); color: var(--ink);
   display: flex; flex-direction: column; }
 /* na tabuli pevná výška okna — dlouhé sloupce se rolují uvnitř, ne přes celou stránku */
 .app.tabule-rezim { height: 100vh; min-height: 0; overflow: hidden; }
@@ -192,7 +192,10 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
   letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
 
 .hlaska { padding: var(--space-4) var(--space-6); color: var(--muted); font-size: 15px; }
-.chyba-pruh { background: var(--red-100); color: var(--red); padding: var(--space-2) var(--space-6); font-size: 15px; }
+.chyba-pruh { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 100;
+  max-width: 640px; width: calc(100% - 32px);
+  background: var(--red-100); color: var(--red); border-left: 3px solid var(--red);
+  padding: var(--space-2) var(--space-4); font-size: 15px; box-shadow: 0 4px 16px rgba(28,43,51,.18); }
 
 /* ---------- tablet a telefon ---------- */
 /* Na tabletu u tiskárny se stav mění dropdownem a hit targety mají aspoň 44 px. */
