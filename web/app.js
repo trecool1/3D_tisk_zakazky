@@ -1373,7 +1373,9 @@ function obrazovkaNastaveni() {
             h('button', { style: 'background:' + (t.aktivni ? 'var(--teal-100)' : 'var(--line)')
                 + ';color:' + (t.aktivni ? 'var(--teal-700)' : 'var(--muted-2)')
                 + ';border:0;border-radius:var(--radius-md);padding:5px 9px;cursor:pointer;font-size:13px',
-              onclick: () => { t.aktivni = !t.aktivni; ulozTiskarnu(t); } }, t.aktivni ? 'aktivní' : 'neaktivní')),
+              onclick: () => { t.aktivni = !t.aktivni; ulozTiskarnu(t); } }, t.aktivni ? 'aktivní' : 'neaktivní'),
+            t.aktivni && h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px',
+              onclick: () => smazTiskarnu(t) }, 'smazat')),
           h('div', { style: 'display:flex;flex-direction:column;gap:4px;margin:6px 0 0 var(--space-4)' },
             S.stroje.filter(s => s.tiskarnaId === t.id).map(s => h('div', {
                 style: 'display:flex;align-items:center;gap:var(--space-2)' },
@@ -1492,6 +1494,10 @@ async function ulozTiskarnu(t) {
 }
 async function ulozStroj(s) {
   try { await api('stroj-uloz', s); await nactiTiskarny(); } catch (e) { hlas(e); }
+}
+async function smazTiskarnu(t) {
+  if (!confirm('Smazat tiskárnu ' + t.nazev + '? Deaktivují se i její stroje — nepůjde dál navrhovat na výrobu.')) return;
+  try { await api('tiskarna-uloz', { klic: t.klic, smazat: true }); await nactiTiskarny(); } catch (e) { hlas(e); }
 }
 async function smazStroj(s) {
   try { await api('stroj-uloz', { id: s.id, smazat: true }); await nactiTiskarny(); } catch (e) { hlas(e); }

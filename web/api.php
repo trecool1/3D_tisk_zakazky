@@ -454,7 +454,11 @@ try {
 
     case 'tiskarna-uloz': {
       vyzadujAdmina();
-      tiskarnaUloz($v);
+      if (!empty($v['smazat'])) {
+        tiskarnaSmaz((string)($v['klic'] ?? ''));
+      } else {
+        tiskarnaUloz($v);
+      }
       odesliJson(['ok' => true]);
     }
 

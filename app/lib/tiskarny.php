@@ -68,6 +68,20 @@ function strojSmaz(int $id): void {
   db()->prepare('UPDATE stroje SET aktivni = 0 WHERE id = ?')->execute([$id]);
 }
 
+/**
+ * "Smazání" tiskárny je vždy jen deaktivace (typ se dá znovu seedovat z ceníku
+ * kalkulátoru přes instaluj.php, hard delete by se tedy stejně příště vrátil) —
+ * navíc deaktivuje i její stroje, ať s ní hned přestane počítat plánování výroby.
+ */
+function tiskarnaSmaz(string $klic): void {
+  $q = db()->prepare('SELECT id FROM tiskarny WHERE klic = ?');
+  $q->execute([$klic]);
+  $id = $q->fetchColumn();
+  if (!$id) return;
+  db()->prepare('UPDATE tiskarny SET aktivni = 0 WHERE id = ?')->execute([$id]);
+  db()->prepare('UPDATE stroje SET aktivni = 0 WHERE tiskarna_id = ?')->execute([$id]);
+}
+
 /** Case-insensitive hledání podle názvu — pro spárování starého textového pole zakazky.tiskarna. */
 function tiskarnaPodleNazvu(string $nazev): ?array {
   $nazev = trim($nazev);
