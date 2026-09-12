@@ -82,7 +82,7 @@ input, select, textarea, button { font-family: var(--font-body); font-size: 15px
 
 /* ---------- kostra ---------- */
 
-.app { min-height: 100vh; max-width: 100%; overflow-x: hidden; background: var(--bg); color: var(--ink);
+.app { min-height: 100vh; max-width: 100%; overflow-x: hidden; overflow-y: visible; background: var(--bg); color: var(--ink);
   display: flex; flex-direction: column; }
 /* na tabuli pevná výška okna — dlouhé sloupce se rolují uvnitř, ne přes celou stránku */
 .app.tabule-rezim { height: 100vh; min-height: 0; overflow: hidden; }

@@ -1281,15 +1281,16 @@ function planovaniScreen() {
         S.planPool.length === 0 && h('div', { style: 'font-size:14px;color:var(--muted);font-style:italic;padding-top:var(--space-2);border-top:1px solid var(--line)' },
           'Všechny díly čekajících zakázek jsou přiřazené.')),
 
-      h('div', { style: 'min-width:0;position:sticky;top:var(--space-4)' },
-        h('h3', { class: 'kicker' }, 'Navržené úlohy — přetáhni díl na zařízení'),
-        S.planJobs.map(planJobKarta),
-        S.planJobs.length === 0 && h('div', { style: 'font-size:14px;color:var(--muted);font-style:italic;padding:var(--space-2) 0;border-top:1px solid var(--line)' },
-          'Zatím žádná úloha — přetáhni díl na zařízení níže nebo dej automatický návrh.'),
-        h('div', { style: 'margin-top:var(--space-5)' },
-          h('h3', { class: 'kicker' }, 'Zařízení — sem přetáhni díl'),
-          h('div', { style: 'display:flex;flex-wrap:wrap;gap:var(--space-2)' },
-            (S.stroje || []).filter(s => s.aktivni).map(planStrojDlazdice))))));
+      h('div', { style: 'min-width:0' },
+        h('div', { style: 'position:sticky;top:var(--space-4)' },
+          h('h3', { class: 'kicker' }, 'Navržené úlohy — přetáhni díl na zařízení'),
+          S.planJobs.map(planJobKarta),
+          S.planJobs.length === 0 && h('div', { style: 'font-size:14px;color:var(--muted);font-style:italic;padding:var(--space-2) 0;border-top:1px solid var(--line)' },
+            'Zatím žádná úloha — přetáhni díl na zařízení níže nebo dej automatický návrh.'),
+          h('div', { style: 'margin-top:var(--space-5)' },
+            h('h3', { class: 'kicker' }, 'Zařízení — sem přetáhni díl'),
+            h('div', { style: 'display:flex;flex-wrap:wrap;gap:var(--space-2)' },
+              (S.stroje || []).filter(s => s.aktivni).map(planStrojDlazdice)))))));
 }
 
 function planPoolSkupina(g) {
