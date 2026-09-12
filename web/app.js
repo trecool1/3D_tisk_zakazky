@@ -1272,7 +1272,7 @@ function planovaniScreen() {
         h('button', { class: 'btn btn-primary', disabled: S.planJobs.length === 0, onclick: planPotvrdit },
           'Potvrdit a odeslat do tisku'))),
 
-    h('div', { style: 'display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:var(--space-6);align-items:start' },
+    h('div', { style: 'display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:var(--space-6)' },
       h('div', { style: 'min-width:0' },
         h('h3', { class: 'kicker' }, 'Nepřiřazené díly'),
         h('p', { style: 'font-size:13px;color:var(--muted-2);margin:0 0 var(--space-3) 0;max-width:36ch' },
