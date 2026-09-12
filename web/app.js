@@ -1120,16 +1120,16 @@ function strojRadek(s, aktivni) {
 
 async function nactiPlanovani() {
   const p = await api('planovani');
-  S.planPool = p.zakazky.map(g => ({ cislo: g.cislo, polozky: g.polozky.map(x => ({ ...x, move: x.pocet })) }));
+  S.planPool = p.zakazky.map(g => ({ cislo: g.cislo, zakaznik: g.zakaznik, polozky: g.polozky.map(x => ({ ...x, move: x.pocet })) }));
   S.planJobs = [];
   vykresli();
 }
 
 function planFill(job) { return job.polozky.reduce((t, p) => t + p.pocet / p.perjob, 0); }
 
-function planPridejDoPoolu(zakazkaCislo, polozka) {
+function planPridejDoPoolu(zakazkaCislo, zakaznik, polozka) {
   let skupina = S.planPool.find(g => g.cislo === zakazkaCislo);
-  if (!skupina) { skupina = { cislo: zakazkaCislo, polozky: [] }; S.planPool.push(skupina); }
+  if (!skupina) { skupina = { cislo: zakazkaCislo, zakaznik, polozky: [] }; S.planPool.push(skupina); }
   const existujici = skupina.polozky.find(p => p.id === polozka.id);
   if (existujici) existujici.pocet += polozka.pocet;
   else skupina.polozky.push({ ...polozka, move: polozka.pocet });
@@ -1157,7 +1157,8 @@ function planNajdiNeboZalozJob(tiskarnaId, tiskarnaNazev, material, strojId) {
 function planPridejDoJobu(job, item, pocet) {
   const existujici = job.polozky.find(p => p.id === item.id);
   if (existujici) existujici.pocet += pocet;
-  else job.polozky.push({ id: item.id, nazev: item.nazev, perjob: item.perjob, pocet, zakazkaCislo: item.zakazkaCislo });
+  else job.polozky.push({ id: item.id, nazev: item.nazev, perjob: item.perjob, pocet,
+    zakazkaCislo: item.zakazkaCislo, zakaznik: item.zakaznik });
 }
 
 function planDropNaStroj(strojId) {
@@ -1193,7 +1194,7 @@ function planOdeberZJobu(jobKey, polozkaId) {
   const idx = job.polozky.findIndex(p => p.id === polozkaId);
   if (idx === -1) return;
   const [p] = job.polozky.splice(idx, 1);
-  planPridejDoPoolu(p.zakazkaCislo, { id: p.id, nazev: p.nazev, material: job.material,
+  planPridejDoPoolu(p.zakazkaCislo, p.zakaznik, { id: p.id, nazev: p.nazev, material: job.material,
     tiskarnaId: job.tiskarnaId, tiskarnaNazev: job.tiskarnaNazev, pocet: p.pocet, perjob: p.perjob });
   if (job.polozky.length === 0) S.planJobs = S.planJobs.filter(j => j.key !== jobKey);
   vykresli();
@@ -1227,7 +1228,7 @@ function planRozdel(jobKey) {
 async function planAutoNavrh() {
   const d = await api('navrh');
   const p = await api('planovani');
-  S.planPool = p.zakazky.map(g => ({ cislo: g.cislo, polozky: g.polozky.map(x => ({ ...x, move: x.pocet })) }));
+  S.planPool = p.zakazky.map(g => ({ cislo: g.cislo, zakaznik: g.zakaznik, polozky: g.polozky.map(x => ({ ...x, move: x.pocet })) }));
   S.planJobs = d.navrhy.map(n => ({
     key: 'k' + (++S.planSeq), tiskarnaId: n.tiskarnaId, tiskarnaNazev: n.tiskarna, material: n.material, strojId: n.strojId,
     polozky: n.polozky.map(p => ({ id: p.id, nazev: p.nazev, pocet: p.pocet, perjob: p.perjob, zakazkaCislo: p.zakazkaCislo })),
@@ -1280,7 +1281,7 @@ function planovaniScreen() {
         S.planPool.length === 0 && h('div', { style: 'font-size:14px;color:var(--muted);font-style:italic;padding-top:var(--space-2);border-top:1px solid var(--line)' },
           'Všechny díly čekajících zakázek jsou přiřazené.')),
 
-      h('div', { style: 'min-width:0' },
+      h('div', { style: 'min-width:0;position:sticky;top:var(--space-4)' },
         h('h3', { class: 'kicker' }, 'Navržené úlohy — přetáhni díl na zařízení'),
         S.planJobs.map(planJobKarta),
         S.planJobs.length === 0 && h('div', { style: 'font-size:14px;color:var(--muted);font-style:italic;padding:var(--space-2) 0;border-top:1px solid var(--line)' },
@@ -1292,10 +1293,12 @@ function planovaniScreen() {
 }
 
 function planPoolSkupina(g) {
-  return h('div', { style: 'margin-bottom:var(--space-4)' },
-    h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-2);padding-bottom:4px' },
-      h('span', { style: 'font-family:var(--font-heading);font-size:17px' }, g.cislo),
-      h('a', { href: '#', style: 'font-size:12px;color:var(--muted-2);text-decoration:underline',
+  return h('div', { style: 'margin-bottom:var(--space-5);padding:var(--space-3);background:var(--panel);border-left:3px solid var(--teal)' },
+    h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-2);padding-bottom:6px' },
+      h('span', {},
+        h('span', { style: 'font-family:var(--font-heading);font-size:18px;font-weight:600' }, g.zakaznik || '—'),
+        h('span', { style: 'font-size:13px;color:var(--muted-2);margin-left:8px' }, g.cislo)),
+      h('a', { href: '#', style: 'font-size:12px;color:var(--muted-2);text-decoration:underline;white-space:nowrap',
         onclick: e => { e.preventDefault(); S.view = 'board'; vykresli(); otevri(g.cislo); } }, 'otevřít kartu')),
     g.polozky.map(it => planPoolPolozka(g, it)));
 }
@@ -1304,7 +1307,7 @@ function planPoolPolozka(g, it) {
   return h('div', {
       draggable: 'true',
       ondragstart: e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(it.id));
-        S.dragItem = { ...it, zakazkaCislo: g.cislo }; },
+        S.dragItem = { ...it, zakazkaCislo: g.cislo, zakaznik: g.zakaznik }; },
       style: 'padding:var(--space-2) 0 var(--space-2) var(--space-2);border-top:1px solid var(--line);cursor:grab;display:flex;flex-direction:column;gap:6px' },
     h('div', { style: 'display:flex;justify-content:space-between;gap:var(--space-2);align-items:baseline' },
       h('span', { style: 'display:flex;flex-direction:column;gap:2px' },

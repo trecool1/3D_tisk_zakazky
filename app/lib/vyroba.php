@@ -214,6 +214,7 @@ function jeExpres(string $rychlost): bool {
 function polozkyKPotisku(): array {
   $q = db()->query(
     "SELECT p.*, z.cislo AS zakazka_cislo, z.vytvoreno AS zakazka_vytvoreno,
+            CASE WHEN z.zak_firma <> '' THEN z.zak_firma ELSE z.zak_jmeno END AS zakazka_zakaznik,
             COALESCE((SELECT SUM(up.pocet) FROM uloha_polozky up WHERE up.polozka_id = p.id), 0) AS jiz_planovano
        FROM polozky p JOIN zakazky z ON z.id = p.zakazka_id
       WHERE z.stav NOT IN ('hotovo','odlozeno')
@@ -239,7 +240,8 @@ function nepridelenaFronta(): array {
     if (jeExpres($p['rychlost'])) continue;
     $zid = (int)$p['zakazka_id'];
     if (!isset($poZakazce[$zid])) {
-      $poZakazce[$zid] = ['cislo' => $p['zakazka_cislo'], 'vytvoreno' => $p['zakazka_vytvoreno'], 'polozky' => []];
+      $poZakazce[$zid] = ['cislo' => $p['zakazka_cislo'], 'zakaznik' => $p['zakazka_zakaznik'],
+                           'vytvoreno' => $p['zakazka_vytvoreno'], 'polozky' => []];
     }
     $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
     $poZakazce[$zid]['polozky'][] = [
