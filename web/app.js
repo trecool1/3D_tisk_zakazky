@@ -77,7 +77,7 @@ const S = {
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
   smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false,
   firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
-  nastaveniData: null, tiskarny: [], stroje: [], pubCislo: null, kopirovano: false,
+  nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], dragUloha: null, pubCislo: null, kopirovano: false,
   chyba: '', nacitam: false,
 };
 
@@ -221,9 +221,9 @@ function hlavicka() {
   const poTerminu    = S.zakazky.filter(z => !UZAVRENO.includes(z.stav) && z.dnuDoTerminu < 0).length;
 
   const pohledy = [
-    ['board', 'Tabule'], ['list', 'Seznam'], ['customers', 'Zákazníci'],
+    ['board', 'Tabule'], ['list', 'Seznam'], ['production', 'Výroba'], ['customers', 'Zákazníci'],
     ['mail', 'Pošta'], ['inbox', 'Nezařazeno'], ['settings', 'Nastavení'], ['public', 'Náhled pro zákazníka'],
-  ].filter(([k]) => jeAdmin() || (k !== 'settings' && (muzeMenit() || (k !== 'inbox' && k !== 'mail'))));
+  ].filter(([k]) => jeAdmin() || (k !== 'settings' && (muzeMenit() || (k !== 'inbox' && k !== 'mail' && k !== 'production'))));
 
   // Počty jsou při nule zšedlé a nekliknutelné — jinak by klik vyprázdnil tabuli.
   const pocitadlo = (pocet, text, aktivni, klik) => h('button', {
@@ -264,6 +264,7 @@ async function prepniPohled(k) {
     if (k === 'customers') { S.firmy = (await api('firmy')).firmy; if (!S.firmaKlic && S.firmy[0]) S.firmaKlic = S.firmy[0].klic; }
     if (k === 'mail')      S.posta = (await api('posta&filtr=' + S.postaFiltr)).posta;
     if (k === 'inbox')     S.nezarazeno = await api('nezarazeno');
+    if (k === 'production') S.vyroba = (await api('vyroba')).stroje;
     if (k === 'settings')  {
       S.nastaveniData = await api('nastaveni');
       const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
@@ -1054,6 +1055,72 @@ function obrazovkaSeznam() {
           h('td', {}, jmenoKlice(z.prirazeno) || '—')))))));
 }
 
+/* ---------- Výroba (fronta tiskových úloh) ---------- */
+
+function obrazovkaVyroba() {
+  const stroje = S.vyroba || [];
+  if (!stroje.length) return h('div', { class: 'hlaska' }, 'Žádné aktivní stroje. Přidej je v Nastavení.');
+
+  return h('div', { class: 'tabule' },
+    h('div', { class: 'sloupce' }, stroje.map(strojSloupec)));
+}
+
+function strojSloupec(s) {
+  return h('section', { class: 'sloupec', style: 'width:300px' },
+    h('div', { class: 'sloupec-hlavicka' },
+      h('h4', {}, s.tiskarna + ' · ' + s.oznaceni),
+      h('span', { style: 'font-size:13px;color:var(--muted)' }, String(s.fronta.length))),
+    s.fronta.length > 0 && h('div', { style: 'font-size:13px;color:var(--muted-2);padding:0 var(--space-2) var(--space-2)' },
+      'hotovo nejdřív ' + dt(s.hotovoNejdrive) + ' · ' + hod(s.celkemHodin) + ' h'),
+    h('div', { class: 'sloupec-karty' },
+      s.fronta.length === 0
+        ? h('div', { style: 'font-size:15px;color:var(--muted);padding:var(--space-2)' }, 'Fronta je prázdná')
+        : s.fronta.map(u => ulohaKarta(u, s.strojId))));
+}
+
+function ulohaKarta(u, strojId) {
+  const dalsi = { fronta: ['tiskne', 'Zahájit tisk'], tiskne: ['hotovo', 'Dokončeno'] }[u.stav];
+  return h('article', {
+      class: 'card karta' + (S.dragUloha === u.id ? ' tazena' : ''),
+      style: 'cursor:grab;border-left-color:' + (u.expres ? 'var(--red)' : 'var(--line)'),
+      draggable: 'true',
+      ondragstart: e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(u.id));
+        S.dragUloha = u.id; },
+      ondragend: () => { S.dragUloha = null; vykresli(); },
+      ondragover: e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
+      ondrop: e => {
+        e.preventDefault(); e.stopPropagation();
+        const src = S.dragUloha; S.dragUloha = null;
+        if (!src || src === u.id) { vykresli(); return; }
+        zmenUlohaPoradi(src, u.id, strojId);
+      },
+    },
+    h('div', { class: 'telo' },
+      h('div', { class: 'radek1' },
+        h('span', { class: 'cislo' }, u.material || '—'),
+        u.expres && h('span', { class: 'prio', style: 'color:var(--red)' }, 'expres')),
+      h('div', { class: 'radek2' },
+        h('div', { style: 'min-width:0' },
+          h('div', { class: 'zakaznik' }, u.zakazky.join(', ') || '—'),
+          h('div', { class: 'souhrn' }, hod(u.hodinTisk) + ' h tisk + ' + hod(u.hodinChladnuti) + ' h chladnutí'))),
+      h('div', { class: 'radek3' },
+        h('span', { style: 'color:var(--muted-2)' }, 'hotovo nejdřív ' + dt(u.hotovoNejdrive)),
+        dalsi && h('button', { class: 'btn btn-secondary', style: 'padding:2px 8px;font-size:12px',
+          onclick: () => zmenUlohaStav(u.id, dalsi[0]) }, dalsi[1]))));
+}
+
+async function zmenUlohaPoradi(id, nad, strojId) {
+  const s = (S.vyroba || []).find(x => x.strojId === strojId);
+  const u = s && s.fronta.find(x => x.id === id);
+  if (u) vykresli();
+  try { await api('uloha-poradi', { id, nad }); } catch (e) { hlas(e); }
+  S.vyroba = (await api('vyroba')).stroje; vykresli();
+}
+async function zmenUlohaStav(id, stav) {
+  try { await api('uloha-stav', { id, stav }); } catch (e) { hlas(e); }
+  S.vyroba = (await api('vyroba')).stroje; vykresli();
+}
+
 /* ---------- Zákazníci ---------- */
 
 function obrazovkaZakaznici() {
@@ -1435,13 +1502,14 @@ function vykresli() {
     obsah = obrazovkaPrihlaseni();
   } else {
     const podle = {
-      board: obrazovkaTabule, list: obrazovkaSeznam, customers: obrazovkaZakaznici,
+      board: obrazovkaTabule, list: obrazovkaSeznam, production: obrazovkaVyroba, customers: obrazovkaZakaznici,
       mail: obrazovkaPosta, inbox: obrazovkaNezarazeno, settings: obrazovkaNastaveni,
       public: obrazovkaNahled,
     };
     // pohled, na který uživatel nemá právo, se tiše sklopí na tabuli / seznam
     let view = S.view;
-    if ((view === 'settings' && !jeAdmin()) || ((view === 'inbox' || view === 'mail') && !muzeMenit())) {
+    if ((view === 'settings' && !jeAdmin())
+        || ((view === 'inbox' || view === 'mail' || view === 'production') && !muzeMenit())) {
       view = muzeMenit() ? 'board' : 'list';
       S.view = view;
     }

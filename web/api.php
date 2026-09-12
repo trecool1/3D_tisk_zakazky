@@ -9,6 +9,7 @@ require KANBAN_APP . '/lib/auth.php';
 require KANBAN_APP . '/lib/zakazky.php';
 require KANBAN_APP . '/lib/pricing.php';
 require KANBAN_APP . '/lib/tiskarny.php';
+require KANBAN_APP . '/lib/vyroba.php';
 require KANBAN_APP . '/lib/mail.php';
 require KANBAN_APP . '/lib/pohled.php';
 
@@ -464,6 +465,32 @@ try {
       } else {
         strojUloz($v);
       }
+      odesliJson(['ok' => true]);
+    }
+
+    /* ---------- výroba (fronta tiskových úloh) ---------- */
+
+    case 'vyroba': {
+      vyzadujPrihlaseni();
+      odesliJson(['ok' => true, 'stroje' => vsechnyFronty()]);
+    }
+
+    case 'uloha-detail': {
+      vyzadujPrihlaseni();
+      $u = ulohaDetail((int)($v['id'] ?? 0));
+      if (!$u) chyba('Úloha nenalezena.', 404);
+      odesliJson(['ok' => true, 'uloha' => $u]);
+    }
+
+    case 'uloha-poradi': {
+      vyzadujZapis();
+      ulohaPoradiZmen((int)($v['id'] ?? 0), (int)($v['nad'] ?? 0));
+      odesliJson(['ok' => true]);
+    }
+
+    case 'uloha-stav': {
+      vyzadujZapis();
+      ulohaStavZmen((int)($v['id'] ?? 0), (string)($v['stav'] ?? ''));
       odesliJson(['ok' => true]);
     }
 

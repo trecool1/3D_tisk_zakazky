@@ -183,6 +183,37 @@ CREATE TABLE IF NOT EXISTS stroje (
 );
 CREATE INDEX IF NOT EXISTS ix_stroje_tiskarna ON stroje(tiskarna_id);
 
+-- Fronta tiskových úloh: jedna úloha = jedno vytištění na jednom stroji, může
+-- svázat díly z více zakázek (dávkování stejného materiálu, viz uloha_polozky).
+CREATE TABLE IF NOT EXISTS tiskove_ulohy (
+  id                   INTEGER PRIMARY KEY,
+  stroj_id             INTEGER REFERENCES stroje(id),
+  tiskarna_id          INTEGER NOT NULL REFERENCES tiskarny(id),
+  material             TEXT    NOT NULL DEFAULT '',
+  poradi               INTEGER NOT NULL DEFAULT 0,
+  odhad_hodin_tisk      REAL    NOT NULL DEFAULT 0,
+  odhad_hodin_chladnuti REAL    NOT NULL DEFAULT 0,
+  stav                 TEXT    NOT NULL DEFAULT 'fronta',   -- fronta | tiskne | hotovo
+  expres               INTEGER NOT NULL DEFAULT 0,
+  poznamka             TEXT    NOT NULL DEFAULT '',
+  vytvoreno            TEXT    NOT NULL DEFAULT (datetime('now')),
+  zahajeno             TEXT,
+  dokonceno            TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_ulohy_stroj ON tiskove_ulohy(stroj_id);
+CREATE INDEX IF NOT EXISTS ix_ulohy_stav  ON tiskove_ulohy(stav);
+
+-- existence řádku = díl je naplánovaný do úlohy; nic dalšího se neznačí
+CREATE TABLE IF NOT EXISTS uloha_polozky (
+  id         INTEGER PRIMARY KEY,
+  uloha_id   INTEGER NOT NULL REFERENCES tiskove_ulohy(id) ON DELETE CASCADE,
+  polozka_id INTEGER NOT NULL REFERENCES polozky(id) ON DELETE CASCADE,
+  pocet      INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (uloha_id, polozka_id)
+);
+CREATE INDEX IF NOT EXISTS ix_uloha_polozky_uloha ON uloha_polozky(uloha_id);
+CREATE INDEX IF NOT EXISTS ix_uloha_polozky_polozka ON uloha_polozky(polozka_id);
+
 CREATE TABLE IF NOT EXISTS sloupce (
   id     INTEGER PRIMARY KEY,
   klic   TEXT    NOT NULL UNIQUE,
