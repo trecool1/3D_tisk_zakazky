@@ -494,16 +494,18 @@ try {
       odesliJson(['ok' => true]);
     }
 
-    case 'davky': {
+    case 'pozadavky': {
       vyzadujPrihlaseni();
-      odesliJson(array_merge(['ok' => true], poolyPrehled()));
+      odesliJson(array_merge(['ok' => true], pozadavkyVyroby()));
     }
 
-    case 'davka-spustit': {
+    case 'pozadavek-vytisknout': {
       vyzadujZapis();
-      $id = poolPromuj((int)($v['tiskarnaId'] ?? 0), (string)($v['material'] ?? ''), true);
-      if (!$id) chyba('Dávku se nepodařilo založit (žádné čekající díly?).', 400);
-      odesliJson(['ok' => true, 'ulohaId' => $id]);
+      $r = ulohaZalozRucne(
+        (int)($v['tiskarnaId'] ?? 0), (string)($v['material'] ?? ''), (string)($v['nazev'] ?? ''),
+        (int)($v['strojId'] ?? 0), (int)($v['pocet'] ?? 0));
+      if (!$r) chyba('Úlohu se nepodařilo založit (žádné čekající díly, nebo stroj nepatří k tiskárně?).', 400);
+      odesliJson(['ok' => true, 'ulohaId' => $r['ulohaId'], 'alokovano' => $r['alokovano']]);
     }
 
     /* ---------- nastavení (jen Admin) ---------- */
@@ -515,7 +517,6 @@ try {
         'prahy'   => [
           'prahVysoka'     => (float)nastaveni('prahVysoka', '24'),
           'prahNormalni'   => (float)nastaveni('prahNormalni', '72'),
-          'davkaPraH'      => (float)nastaveni('davkaPraH', '0.8'),
         ],
         'infoMaily'    => nastaveni('infoMaily', '0') === '1',
         'infoMailyKam' => nastaveni('infoMailyKam', ''),
@@ -535,7 +536,7 @@ try {
 
     case 'nastaveni-uloz': {
       vyzadujAdmina();
-      foreach (['prahVysoka','prahNormalni','davkaPraH'] as $k) {
+      foreach (['prahVysoka','prahNormalni'] as $k) {
         if (array_key_exists($k, $v)) nastavenoUloz($k, (string)$v[$k]);
       }
       if (array_key_exists('infoMaily', $v))    nastavenoUloz('infoMaily', $v['infoMaily'] ? '1' : '0');
