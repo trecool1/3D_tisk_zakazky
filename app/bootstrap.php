@@ -41,6 +41,16 @@ function schemaAktualizuj(): void {
   // Sloupce doplněné do už existujících tabulek (CREATE IF NOT EXISTS je nepřidá).
   sloupecZajisti('soubory', 'pridal', "TEXT NOT NULL DEFAULT ''");
   sloupecZajisti('zakazky', 'schvaleno_videno', 'INTEGER NOT NULL DEFAULT 1');
+  // položka nese vlastní tech/materiál/tiskárnu — u víceřádkových objednávek se
+  // dřív bralo jen z první varianty (viz prijmiPoptavku).
+  sloupecZajisti('polozky', 'tech', "TEXT NOT NULL DEFAULT ''");
+  sloupecZajisti('polozky', 'material', "TEXT NOT NULL DEFAULT ''");
+  sloupecZajisti('polozky', 'rychlost', "TEXT NOT NULL DEFAULT ''");
+  sloupecZajisti('polozky', 'tiskarna_nazev', "TEXT NOT NULL DEFAULT ''");
+  sloupecZajisti('polozky', 'perjob', 'INTEGER NOT NULL DEFAULT 1');
+  sloupecZajisti('polozky', 'hodiny_tisku', 'REAL NOT NULL DEFAULT 0');
+  sloupecZajisti('polozky', 'hodiny_schnuti', 'REAL NOT NULL DEFAULT 0');
+  sloupecZajisti('polozky', 'hodiny_manipulace', 'REAL NOT NULL DEFAULT 0');
 }
 
 /** Idempotentně přidá sloupec do tabulky, pokud v ní ještě není. */

@@ -84,21 +84,34 @@ function prijmiPoptavku(array $d, array $soubory = []): array {
   $z = zakazkaPodleCisla($cislo);
   $id = (int)$z['id'];
 
-  // položky: parts napříč všemi variantami
+  // položky: parts napříč všemi variantami — každá nese vlastní tech/materiál/tiskárnu,
+  // ať se u víceřádkových objednávek (různé varianty = různý materiál/stroj) nic neztratí.
   $poradi = 0;
   foreach ($items as $it) {
-    $itNet = (float)($it['net'] ?? 0);
-    $parts = (array)($it['parts'] ?? []);
+    $itNet  = (float)($it['net'] ?? 0);
+    $itCalc = (array)($it['calc'] ?? []);
+    $caps   = (array)($itCalc['caps'] ?? []);
+    $parts  = (array)($it['parts'] ?? []);
     $celkKs = array_sum(array_map(fn($p) => (int)($p['qty'] ?? 1), $parts)) ?: 1;
     foreach ($parts as $p) {
       $ks = max(1, (int)($p['qty'] ?? 1));
       // cena za kus: podíl na netu položky podle počtu kusů
       $cenaKus = $celkKs > 0 ? ($itNet * 1.21) / $celkKs : 0;
-      db()->prepare('INSERT INTO polozky (zakazka_id, poradi, nazev, bbox, objem, pocet, cena_kus)
-                     VALUES (?,?,?,?,?,?,?)')
+      $perJob = 1;
+      foreach ($caps as $c) {
+        if ((string)($c['name'] ?? '') === (string)($p['name'] ?? '')) { $perJob = max(1, (int)($c['perJob'] ?? 1)); break; }
+      }
+      db()->prepare('INSERT INTO polozky (zakazka_id, poradi, nazev, bbox, objem, pocet, cena_kus,
+                                           tech, material, rychlost, tiskarna_nazev, perjob,
+                                           hodiny_tisku, hodiny_schnuti, hodiny_manipulace)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
           ->execute([$id, $poradi++, (string)($p['name'] ?? 'model'),
                      jsonEnk(array_map('floatval', (array)($p['bbox'] ?? [0,0,0]))),
-                     round((float)($p['volume'] ?? 0), 2), $ks, round($cenaKus, 2)]);
+                     round((float)($p['volume'] ?? 0), 2), $ks, round($cenaKus, 2),
+                     (string)($it['tech'] ?? ''), (string)($it['material'] ?? ''),
+                     (string)($it['speed'] ?? 'Standard'), (string)($it['printer'] ?? ''), $perJob,
+                     (float)($itCalc['printHours'] ?? 0), (float)($itCalc['dryHours'] ?? 0),
+                     (float)($itCalc['handlingHours'] ?? 0)]);
     }
   }
   if ($poradi === 0) {
