@@ -315,6 +315,36 @@ function zmenPocet(array $z, int $polozkaId, int $novy): array {
   return zakazkaPodleId((int)$z['id']);
 }
 
+/**
+ * Změna tiskárny (a tím i technologie) a materiálu u položky — třeba když se
+ * po odeslání nabídky domluvíme se zákazníkem na jiné technologii/materiálu.
+ * Cena se needit (ta jde přebít zvlášť přes "Přebít cenu"), mění se jen to,
+ * na co je díl naceněný a kam patří v plánování výroby.
+ */
+function zmenTechMaterial(array $z, int $polozkaId, string $tiskarnaNazev, string $material): array {
+  $pol = polozky((int)$z['id']);
+  $cil = null;
+  foreach ($pol as $p) if ((int)$p['id'] === $polozkaId) $cil = $p;
+  if (!$cil) return $z;
+
+  $tiskarnaNazev = trim($tiskarnaNazev);
+  $material      = trim($material);
+  if ($tiskarnaNazev === (string)$cil['tiskarna_nazev'] && $material === (string)$cil['material']) return $z;
+
+  $t    = $tiskarnaNazev !== '' ? tiskarnaPodleNazvu($tiskarnaNazev) : null;
+  $tech = $t ? $t['tech'] : '';
+
+  db()->prepare('UPDATE polozky SET tech = ?, material = ?, tiskarna_nazev = ? WHERE id = ?')
+      ->execute([$tech, $material, $tiskarnaNazev, $polozkaId]);
+  db()->prepare('UPDATE zakazky SET zmeneno = ? WHERE id = ?')->execute([ted(), (int)$z['id']]);
+
+  systemovyZaznam((int)$z['id'],
+    'Tiskárna/materiál u ' . $cil['nazev'] . ': ' . ($cil['tiskarna_nazev'] ?: '—') . ' / ' . ($cil['material'] ?: '—')
+    . ' → ' . ($tiskarnaNazev ?: '—') . ' / ' . ($material ?: '—') . ' — ' . mojeJmeno());
+
+  return zakazkaPodleId((int)$z['id']);
+}
+
 /* ---------- čísla zakázek ---------- */
 
 function dalsiCislo(): string {

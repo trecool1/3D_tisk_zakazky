@@ -584,6 +584,7 @@ async function otevri(cislo) {
     Object.assign(S, { draft: '', prebitCena: '', prebitDuvod: '', rezim: 'odpoved', histOpen: false,
       smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false });
     S.detail = (await api('detail', { cislo })).zakazka;
+    if (!S.tiskarny || !S.tiskarny.length) { const t = await api('tiskarny'); S.tiskarny = t.tiskarny; }
     await nactiStav();
     vykresli();
   } catch (e) { S.open = null; hlas(e); }
@@ -688,11 +689,12 @@ function detailPanel() {
       /* 02 — Položky */
       sekce('02 — Položky zakázky'),
       h('div', { class: 'scroll-x' },
-        h('table', { class: 'table', style: 'width:100%;min-width:520px;margin-bottom:var(--space-3)' },
+        h('table', { class: 'table table-kompakt', style: 'width:100%;min-width:520px;margin-bottom:var(--space-3)' },
           h('thead', {}, h('tr', {},
             h('th', {}, 'Soubor'), h('th', {}, 'Rozměry (mm)'),
             h('th', { style: 'text-align:right' }, 'Objem (cm³)'),
             h('th', { style: 'text-align:right' }, 'Ks'),
+            h('th', {}, 'Tiskárna'), h('th', {}, 'Materiál'),
             h('th', { style: 'text-align:right' }, 'Cena/ks'))),
           h('tbody', {}, z.polozky.map(it => h('tr', {},
             h('td', {}, it.nazev),
@@ -701,13 +703,51 @@ function detailPanel() {
             h('td', { style: 'text-align:right' },
               muzeMenit()
                 ? h('input', { class: 'input', type: 'number', min: '1', value: it.pocet,
-                    style: 'width:72px;padding:3px 6px;text-align:right',
+                    style: 'width:52px;padding:3px 4px;text-align:right',
                     onchange: async e => {
                       const v = Math.max(1, parseInt(e.target.value, 10) || 1);
                       try { await api('pocet', { cislo: z.cislo, polozka: it.id, pocet: v }); await obnov(); }
                       catch (err) { hlas(err); }
                     } })
                 : String(it.pocet)),
+            h('td', {},
+              muzeMenit()
+                ? (() => {
+                    const aktivni = (S.tiskarny || []).filter(t => t.aktivni);
+                    const shoda = aktivni.some(t => t.nazev === it.tiskarnaNazev);
+                    return h('select', { class: 'input', style: 'width:128px;padding:3px 4px;font-size:13px',
+                        onchange: async e => {
+                          // materiál se přebírá jen když ho nová tiskárna taky umí — jinak
+                          // by třeba u SLS zůstalo nesmyslně "PLA" ze staré FDM tiskárny
+                          const nova = (S.tiskarny || []).find(t => t.nazev === e.target.value);
+                          const moznosti = nova ? (nova.materialyLabels || []) : [];
+                          const material = moznosti.includes(it.material) ? it.material : (moznosti[0] || '');
+                          try { await api('polozka-tech', { cislo: z.cislo, polozka: it.id,
+                            tiskarnaNazev: e.target.value, material }); await obnov(); }
+                          catch (err) { hlas(err); }
+                        } },
+                      (!shoda ? [h('option', { value: it.tiskarnaNazev || '', selected: true },
+                          it.tiskarnaNazev ? it.tiskarnaNazev + (it.tech ? ' · ' + it.tech : '') + ' (nespárováno)' : '— nevybráno —')] : [])
+                        .concat(aktivni.map(t => h('option', { value: t.nazev, selected: t.nazev === it.tiskarnaNazev }, t.nazev + ' · ' + t.tech))));
+                  })()
+                : (it.tiskarnaNazev || '—') + (it.tech ? ' · ' + it.tech : '')),
+            h('td', {},
+              muzeMenit()
+                ? (() => {
+                    const t = (S.tiskarny || []).find(x => x.nazev === it.tiskarnaNazev);
+                    const moznosti = t ? (t.materialyLabels || []) : [];
+                    const shoda = moznosti.some(m => m === it.material);
+                    return h('select', { class: 'input', style: 'width:76px;padding:3px 4px;font-size:13px',
+                        onchange: async e => {
+                          try { await api('polozka-tech', { cislo: z.cislo, polozka: it.id,
+                            tiskarnaNazev: it.tiskarnaNazev || '', material: e.target.value }); await obnov(); }
+                          catch (err) { hlas(err); }
+                        } },
+                      (!shoda ? [h('option', { value: it.material || '', selected: true },
+                          it.material || '— nevybráno —')] : [])
+                        .concat(moznosti.map(m => h('option', { value: m, selected: m === it.material }, m))));
+                  })()
+                : (it.material || '—')),
             h('td', { style: 'text-align:right' }, kcd(it.cenaKus))))))),
 
       /* 03 — Kalkulace */
@@ -1287,6 +1327,17 @@ async function planAutoNavrh() {
 async function planVyprazdnit() { await nactiPlanovani(); }
 
 async function planPotvrdit() {
+  // přeplněné desky se nezakazují — reálně se do sliceru někdy vejde víc, než
+  // ukáže odhad podle perjob — jen si to obsluha musí vědomě potvrdit
+  const pretazene = S.planJobs.filter(j => planFill(j) > 1);
+  if (pretazene.length) {
+    const seznam = pretazene.map(j =>
+      '• ' + j.tiskarnaNazev + ' · ' + planStrojOznaceni(j.strojId) + ' — ' + Math.round(planFill(j) * 100) + ' %').join('\n');
+    const ok = confirm(
+      'Podle výpočtu se nevejde na jednu desku:\n' + seznam +
+      '\n\nPokud jsi to ověřil(a) ve sliceru a víš, že se to reálně vejde, potvrď OK. Jinak zruš a rozděl na víc úloh.');
+    if (!ok) return;
+  }
   for (const j of S.planJobs) {
     try {
       await api('plan-potvrdit', { tiskarnaId: j.tiskarnaId, material: j.material, strojId: j.strojId,
@@ -1379,7 +1430,10 @@ function planJobKarta(j) {
       style: 'padding:var(--space-3) 0;border-top:1px solid var(--line)' },
     h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-3);flex-wrap:wrap' },
       h('span', { style: 'font-family:var(--font-heading);font-size:18px' }, j.tiskarnaNazev + ' · ' + planStrojOznaceni(j.strojId)),
-      h('span', { style: 'font-size:13px;color:var(--muted-2)' }, pct + ' % · ' + j.material)),
+      h('span', { style: 'display:flex;align-items:baseline;gap:var(--space-2)' },
+        h('span', { style: 'font-size:13px;color:var(--muted-2)' }, pct + ' % · ' + j.material),
+        h('a', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px',
+          href: 'soubory-zip.php?' + j.polozky.map(p => 'p[]=' + p.id).join('&'), target: '_blank' }, 'Modely'))),
     h('div', { style: 'height:8px;background:var(--line);margin-top:8px' },
       h('div', { style: 'height:8px;background:' + (pct > 100 ? 'var(--red)' : 'var(--teal)') + ';width:' + Math.min(100, pct) + '%' })),
     h('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px' },

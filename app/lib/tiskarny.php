@@ -5,19 +5,25 @@ declare(strict_types=1);
 // (viz instaluj.php), stroje spravuje obsluha ručně v Nastavení.
 
 function tiskarnySeznam(): array {
-  return array_map(fn($t) => [
-    'id'         => (int)$t['id'],
-    'klic'       => $t['klic'],
-    'nazev'      => $t['nazev'],
-    'tech'       => $t['tech'],
-    'materialy'  => jsonDek($t['materialy'], []),
-    'build'      => [(float)$t['build_x'], (float)$t['build_y'], (float)$t['build_z']],
-    'spacing'    => (float)$t['spacing'],
-    'rate'       => (float)$t['rate'],
-    'throughput' => (float)$t['throughput'],
-    'inHouse'    => (int)$t['in_house'] === 1,
-    'aktivni'    => (int)$t['aktivni'] === 1,
-  ], db()->query('SELECT * FROM tiskarny ORDER BY nazev')->fetchAll());
+  return array_map(function ($t) {
+    $klice = jsonDek($t['materialy'], []);
+    return [
+      'id'              => (int)$t['id'],
+      'klic'            => $t['klic'],
+      'nazev'           => $t['nazev'],
+      'tech'            => $t['tech'],
+      'materialy'       => $klice,
+      // hezké názvy materiálů (z pricing.json kalkulátoru) pro výběr v UI —
+      // "materialy" jsou jen interní klíče ("pa12"), obsluha chce vidět "PA12"
+      'materialyLabels' => array_map(fn($k) => (string)(pricingNajdi('materials', $k)['label'] ?? $k), $klice),
+      'build'           => [(float)$t['build_x'], (float)$t['build_y'], (float)$t['build_z']],
+      'spacing'         => (float)$t['spacing'],
+      'rate'            => (float)$t['rate'],
+      'throughput'      => (float)$t['throughput'],
+      'inHouse'         => (int)$t['in_house'] === 1,
+      'aktivni'         => (int)$t['aktivni'] === 1,
+    ];
+  }, db()->query('SELECT * FROM tiskarny ORDER BY nazev')->fetchAll());
 }
 
 function strojeSeznam(): array {

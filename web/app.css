@@ -75,6 +75,7 @@ input, select, textarea, button { font-family: var(--font-body); font-size: 15px
   border-bottom: 1px solid var(--line); }
 .table td { padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 16px; }
 .table tbody tr:hover td { background: var(--panel); }
+.table-kompakt th, .table-kompakt td { padding: 5px 6px; font-size: 13px; }
 
 .kicker { font-family: var(--font-heading); font-weight: 600; font-size: 13px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--teal); border-left: 3px solid var(--teal);

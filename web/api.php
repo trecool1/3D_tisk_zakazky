@@ -165,6 +165,14 @@ try {
       odesliJson(['ok' => true]);
     }
 
+    case 'polozka-tech': {
+      vyzadujZapis();
+      $z = $zakazka();
+      zmenTechMaterial($z, (int)($v['polozka'] ?? 0), (string)($v['tiskarnaNazev'] ?? ''), (string)($v['material'] ?? ''));
+      historieZapis((int)$z['id'], 'Změna tiskárny/materiálu položky — ' . mojeJmeno(), snimek($z));
+      odesliJson(['ok' => true]);
+    }
+
     case 'prebit-cenu': {
       vyzadujZapis();
       $z      = $zakazka();

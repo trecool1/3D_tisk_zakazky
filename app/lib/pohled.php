@@ -102,6 +102,9 @@ function zakazkaDetail(array $z): array {
         'pocet'    => (int)$p['pocet'],
         'cenaKus'  => (float)$p['cena_kus'],
         'cenaRadek'=> $p['cena_radek'] === null ? null : (float)$p['cena_radek'],
+        'tech'          => $p['tech'],
+        'material'      => $p['material'],
+        'tiskarnaNazev' => $p['tiskarna_nazev'],
       ], polozky((int)$z['id'])),
     'soubory'     => array_map(fn($f) => [
         'id' => (int)$f['id'], 'nazev' => $f['nazev'],

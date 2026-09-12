@@ -259,8 +259,11 @@ function nepridelenaFronta(): array {
  * "Automatický návrh pro vše" na plánovací ploše (obsluha ho pak ještě doladí
  * přetažením, než potvrdí). Rozděluje hladově: díly (FIFO podle data zakázky)
  * postupně padají na stroj, který má v tu chvíli (včetně už rozdaných návrhů)
- * nejmíň hodin ve frontě — tím se vytíží rovnoměrně všechny kusy dané tiskárny,
- * ne jen ten první.
+ * nejmíň hodin ve frontě — tím se vytíží rovnoměrně všechny stroje DANÉ
+ * TECHNOLOGIE (SLS na kterýkoli SLS stroj, FDM na kterýkoli FDM stroj…), ne
+ * jen ten přesný model, pro který byla zakázka naceněná. Zatím vždy jedna
+ * úloha na stroj (bez automatického dělení na víc desek podle kapacity) —
+ * obsluha si to případně rozdělí ručně tlačítkem "Rozdělit na více úloh".
  */
 function navrhDavek(): array {
   $skupiny = [];
@@ -271,25 +274,33 @@ function navrhDavek(): array {
     $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
     if (!$t) { $nesparovano[$p['tiskarna_nazev']] = ($nesparovano[$p['tiskarna_nazev']] ?? 0) + $p['zbyva']; continue; }
 
-    $klic = $t['id'] . '|' . $p['material'];
+    $klic = $t['tech'] . '|' . $p['material'];
     if (!isset($skupiny[$klic])) {
-      $skupiny[$klic] = ['tiskarnaId' => (int)$t['id'], 'tiskarna' => $t['nazev'], 'material' => $p['material'], 'polozky' => []];
+      $skupiny[$klic] = ['tech' => $t['tech'], 'material' => $p['material'], 'polozky' => []];
     }
     $skupiny[$klic]['polozky'][] = $p;
   }
 
   $navrhy = [];
   foreach ($skupiny as $s) {
-    $q = db()->prepare('SELECT id FROM stroje WHERE tiskarna_id = ? AND aktivni = 1');
-    $q->execute([$s['tiskarnaId']]);
-    $stroje = $q->fetchAll(PDO::FETCH_COLUMN);
+    $q = db()->prepare(
+      'SELECT st.id AS stroj_id, st.tiskarna_id, t.nazev AS tiskarna_nazev
+         FROM stroje st JOIN tiskarny t ON t.id = st.tiskarna_id
+        WHERE t.tech = ? AND st.aktivni = 1 AND t.aktivni = 1');
+    $q->execute([$s['tech']]);
+    $stroje = $q->fetchAll();
     if (!$stroje) continue;
 
+    $tiskarnaPodleStroje = [];
+    $nazevPodleStroje = [];
     $zatez = [];
-    foreach ($stroje as $strojId) {
-      $fronta   = frontaStroje((int)$strojId);
+    foreach ($stroje as $st) {
+      $strojId = (int)$st['stroj_id'];
+      $tiskarnaPodleStroje[$strojId] = (int)$st['tiskarna_id'];
+      $nazevPodleStroje[$strojId] = $st['tiskarna_nazev'];
+      $fronta   = frontaStroje($strojId);
       $posledni = $fronta ? $fronta[count($fronta) - 1] : null;
-      $zatez[(int)$strojId] = $posledni ? $posledni['kumulativneHodin'] : 0.0;
+      $zatez[$strojId] = $posledni ? $posledni['kumulativneHodin'] : 0.0;
     }
 
     $naStroji = [];
@@ -301,7 +312,7 @@ function navrhDavek(): array {
 
     foreach ($naStroji as $strojId => $polozky) {
       $navrhy[] = [
-        'tiskarnaId' => $s['tiskarnaId'], 'tiskarna' => $s['tiskarna'], 'material' => $s['material'],
+        'tiskarnaId' => $tiskarnaPodleStroje[$strojId], 'tiskarna' => $nazevPodleStroje[$strojId], 'material' => $s['material'],
         'strojId'    => (int)$strojId,
         'polozky'    => array_map(fn($p) => [
           'id' => (int)$p['id'], 'nazev' => $p['nazev'], 'pocet' => (int)$p['zbyva'], 'perjob' => max(1, (int)$p['perjob']),
