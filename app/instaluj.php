@@ -40,6 +40,9 @@ foreach ($sloupce as $i => [$klic, $nazev, $skryt]) {
 }
 echo "sloupce připraveny\n";
 
+// uzavřené karty ať se netváří, že je ještě něco sleduje automaticky
+db()->exec("UPDATE zakazky SET stav_auto = 0 WHERE stav IN ('hotovo','odlozeno')");
+
 // dožene sloupec karty podle už existujících tiskových úloh (např. po téhle migraci)
 synchronizujStavZakazek(db()->query('SELECT id FROM zakazky')->fetchAll(PDO::FETCH_COLUMN));
 echo "stav karet dosynchronizován s výrobou\n";
