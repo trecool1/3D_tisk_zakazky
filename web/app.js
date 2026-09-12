@@ -264,7 +264,10 @@ async function prepniPohled(k) {
     if (k === 'customers') { S.firmy = (await api('firmy')).firmy; if (!S.firmaKlic && S.firmy[0]) S.firmaKlic = S.firmy[0].klic; }
     if (k === 'mail')      S.posta = (await api('posta&filtr=' + S.postaFiltr)).posta;
     if (k === 'inbox')     S.nezarazeno = await api('nezarazeno');
-    if (k === 'production') { S.vyroba = (await api('vyroba')).stroje; S.pozadavky = await api('pozadavky'); }
+    if (k === 'production') {
+      S.vyroba = (await api('vyroba')).stroje; S.pozadavky = await api('pozadavky');
+      const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
+    }
     if (k === 'settings')  {
       S.nastaveniData = await api('nastaveni');
       const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
