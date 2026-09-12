@@ -142,7 +142,7 @@ function ulohaStavZmen(int $id, string $novy): void {
 /**
  * Sloupec karty odvozený ze stavu jejích tiskových úloh. Množstevně: položka je
  * "plně naplánovaná" až když součet uloha_polozky.pocet dosáhne jejího celkového
- * počtu — obsluha totiž nemusí vzít najednou všechno (viz ulohaZalozRucne).
+ * počtu — návrh dávky nemusí vzít najednou všechno, co zbývá (viz navrhDavek).
  */
 function stavZakazkyPodleUloh(int $zakazkaId): ?string {
   $qCelkem = db()->prepare('SELECT COUNT(*) FROM polozky WHERE zakazka_id = ?');
@@ -223,12 +223,14 @@ function polozkyKPotisku(): array {
 }
 
 /**
- * Přehled "co je potřeba vytisknout", seskupený podle (tiskárna, materiál, název
- * dílu) — ne podle zakázky, protože obsluhu u tiskárny zajímá model a materiál,
- * ne čí je to objednávka. odhadUloh je jen informační (zbývá/perJob z kalkulátoru),
- * skutečné množství pro tisk vždy zadává obsluha ručně (viz ulohaZalozRucne).
+ * Automatický návrh, jak rozdělit čekající díly na konkrétní stroje — program
+ * navrhne, obsluha jen doladí (přesune návrh na jiný stroj stejného typu, nebo
+ * ho rovnou potvrdí). Rozděluje hladově: díly (FIFO podle data zakázky) postupně
+ * padají na stroj, který má v tu chvíli (včetně už rozdaných návrhů) nejmíň
+ * hodin ve frontě — tím se vytíží rovnoměrně všechny kusy dané tiskárny, ne
+ * jen ten první. Expres se nenavrhuje, ten jde vlastní cestou hned automaticky.
  */
-function pozadavkyVyroby(): array {
+function navrhDavek(): array {
   $skupiny = [];
   $nesparovano = [];
 
@@ -237,24 +239,72 @@ function pozadavkyVyroby(): array {
     $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
     if (!$t) { $nesparovano[$p['tiskarna_nazev']] = ($nesparovano[$p['tiskarna_nazev']] ?? 0) + $p['zbyva']; continue; }
 
-    $klic = $t['id'] . '|' . $p['material'] . '|' . $p['nazev'];
+    $klic = $t['id'] . '|' . $p['material'];
     if (!isset($skupiny[$klic])) {
-      $skupiny[$klic] = ['tiskarnaId' => $t['id'], 'tiskarna' => $t['nazev'], 'material' => $p['material'],
-                          'nazev' => $p['nazev'], 'zbyva' => 0, 'perjob' => max(1, (int)$p['perjob']),
-                          'zakazky' => []];
+      $skupiny[$klic] = ['tiskarnaId' => (int)$t['id'], 'tiskarna' => $t['nazev'], 'material' => $p['material'], 'polozky' => []];
     }
-    $skupiny[$klic]['zbyva'] += $p['zbyva'];
-    $skupiny[$klic]['zakazky'][] = ['cislo' => $p['zakazka_cislo'], 'polozkaId' => (int)$p['id'], 'zbyva' => $p['zbyva']];
+    $skupiny[$klic]['polozky'][] = $p;
   }
 
-  $out = array_map(fn($s) => [
-    'tiskarnaId' => $s['tiskarnaId'], 'tiskarna' => $s['tiskarna'], 'material' => $s['material'],
-    'nazev' => $s['nazev'], 'zbyva' => $s['zbyva'], 'odhadUloh' => (int)ceil($s['zbyva'] / $s['perjob']),
-    'zakazek' => count($s['zakazky']), 'zakazky' => $s['zakazky'],
-  ], array_values($skupiny));
-  usort($out, fn($a, $b) => $b['zbyva'] <=> $a['zbyva']);
+  $navrhy = [];
+  foreach ($skupiny as $s) {
+    $q = db()->prepare('SELECT id FROM stroje WHERE tiskarna_id = ? AND aktivni = 1');
+    $q->execute([$s['tiskarnaId']]);
+    $stroje = $q->fetchAll(PDO::FETCH_COLUMN);
+    if (!$stroje) continue;
 
-  return ['pozadavky' => $out, 'nesparovaneTiskarny' => $nesparovano];
+    $zatez = [];
+    foreach ($stroje as $strojId) {
+      $fronta   = frontaStroje((int)$strojId);
+      $posledni = $fronta ? $fronta[count($fronta) - 1] : null;
+      $zatez[(int)$strojId] = $posledni ? $posledni['kumulativneHodin'] : 0.0;
+    }
+
+    $naStroji = [];
+    foreach ($s['polozky'] as $p) {
+      $cilStrojId = array_keys($zatez, min($zatez))[0];
+      $naStroji[$cilStrojId][] = $p;
+      $zatez[$cilStrojId] += (float)$p['hodiny_tisku'] + (float)$p['hodiny_schnuti'];
+    }
+
+    foreach ($naStroji as $strojId => $polozky) {
+      $dily = [];
+      foreach ($polozky as $p) $dily[$p['nazev']] = ($dily[$p['nazev']] ?? 0) + (int)$p['zbyva'];
+      $navrhy[] = [
+        'tiskarnaId'  => $s['tiskarnaId'], 'tiskarna' => $s['tiskarna'], 'material' => $s['material'],
+        'strojId'     => (int)$strojId,
+        'polozkaIds'  => array_map(fn($p) => (int)$p['id'], $polozky),
+        'dily'        => array_map(fn($n, $c) => ['nazev' => $n, 'pocet' => $c], array_keys($dily), array_values($dily)),
+        'zakazky'     => array_values(array_unique(array_map(fn($p) => $p['zakazka_cislo'], $polozky))),
+      ];
+    }
+  }
+
+  return ['navrhy' => $navrhy, 'nesparovaneTiskarny' => $nesparovano];
+}
+
+/** Potvrzení návrhu — založí úlohu přesně z dodaných dílů (obsluha mohla mezitím přesunout na jiný stroj). */
+function navrhPotvrdit(int $tiskarnaId, string $material, int $strojId, array $polozkaIds): ?int {
+  $s = db()->prepare('SELECT id FROM stroje WHERE id = ? AND tiskarna_id = ? AND aktivni = 1');
+  $s->execute([$strojId, $tiskarnaId]);
+  if (!$s->fetchColumn()) return null;
+  if (!$polozkaIds) return null;
+
+  $placeholders = implode(',', array_fill(0, count($polozkaIds), '?'));
+  $q = db()->prepare(
+    "SELECT p.*, COALESCE((SELECT SUM(up.pocet) FROM uloha_polozky up WHERE up.polozka_id = p.id), 0) AS jiz_planovano
+       FROM polozky p WHERE p.id IN ($placeholders)");
+  $q->execute($polozkaIds);
+
+  $alokace = [];
+  foreach ($q->fetchAll() as $p) {
+    $zbyva = (int)$p['pocet'] - (int)$p['jiz_planovano'];
+    if ($zbyva <= 0) continue;
+    $alokace[] = ['polozka' => $p, 'pocet' => $zbyva];
+  }
+  if (!$alokace) return null;
+
+  return ulohaZaloz($tiskarnaId, $material, $alokace, false, $strojId);
 }
 
 /** Aktivní stroj daného typu s nejmenší zátěží ve frontě (rozložení mezi víc kusů). */
@@ -324,38 +374,6 @@ function prvniPoradiStroje(int $strojId): int {
   $q->execute([$strojId]);
   $v = $q->fetchColumn();
   return $v === null ? 0 : ((int)$v) - 1;
-}
-
-/**
- * Ruční založení úlohy: obsluha vybere model (tiskárna+materiál+název), stroj
- * a kolik kusů chce tisknout teď — nemusí to být všechno, co zbývá. Alokuje se
- * FIFO (nejstarší zakázka nejdřív) přes všechny otevřené zakázky čekající na
- * tenhle model/materiál/tiskárnu.
- */
-function ulohaZalozRucne(int $tiskarnaId, string $material, string $nazev, int $strojId, int $pocet): ?array {
-  if ($pocet <= 0) return null;
-  $s = db()->prepare('SELECT id FROM stroje WHERE id = ? AND tiskarna_id = ? AND aktivni = 1');
-  $s->execute([$strojId, $tiskarnaId]);
-  if (!$s->fetchColumn()) return null;
-
-  $kandidati = array_values(array_filter(polozkyKPotisku(), function ($p) use ($tiskarnaId, $material, $nazev) {
-    if (jeExpres($p['rychlost']) || $p['material'] !== $material || $p['nazev'] !== $nazev) return false;
-    $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
-    return $t && (int)$t['id'] === $tiskarnaId;
-  }));
-  if (!$kandidati) return null;
-
-  $alokace = []; $zbyvaAlokovat = $pocet;
-  foreach ($kandidati as $p) {
-    if ($zbyvaAlokovat <= 0) break;
-    $vezmi = min((int)$p['zbyva'], $zbyvaAlokovat);
-    $alokace[] = ['polozka' => $p, 'pocet' => $vezmi];
-    $zbyvaAlokovat -= $vezmi;
-  }
-  if (!$alokace) return null;
-
-  $ulohaId = ulohaZaloz($tiskarnaId, $material, $alokace, false, $strojId);
-  return $ulohaId ? ['ulohaId' => $ulohaId, 'alokovano' => $pocet - $zbyvaAlokovat] : null;
 }
 
 /** Expresní díly zakázky nikdy nečekají — hned na začátek fronty vhodného stroje. */

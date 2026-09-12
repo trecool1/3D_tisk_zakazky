@@ -77,7 +77,7 @@ const S = {
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
   smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false,
   firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
-  nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], pozadavky: null, dragUloha: null, pubCislo: null, kopirovano: false,
+  nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], navrh: null, dragUloha: null, pubCislo: null, kopirovano: false,
   chyba: '', nacitam: false,
 };
 
@@ -265,7 +265,7 @@ async function prepniPohled(k) {
     if (k === 'mail')      S.posta = (await api('posta&filtr=' + S.postaFiltr)).posta;
     if (k === 'inbox')     S.nezarazeno = await api('nezarazeno');
     if (k === 'production') {
-      S.vyroba = (await api('vyroba')).stroje; S.pozadavky = await api('pozadavky');
+      S.vyroba = (await api('vyroba')).stroje; S.navrh = await api('navrh');
       const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
     }
     if (k === 'settings')  {
@@ -1048,80 +1048,43 @@ function obrazovkaSeznam() {
 function obrazovkaVyroba() {
   const stroje = S.vyroba || [];
   if (!stroje.length) return h('div', { class: 'hlaska' }, 'Žádné aktivní stroje. Přidej je v Nastavení.');
+  const navrhy = (S.navrh && S.navrh.navrhy) || [];
+  const nesparovano = Object.entries((S.navrh && S.navrh.nesparovaneTiskarny) || {});
 
   return h('div', { style: 'display:flex;flex-direction:column;flex:1;min-height:0' },
-    pozadavkyPanel(),
+    h('div', { class: 'filtry' },
+      h('button', { class: 'btn btn-primary', onclick: obnovNavrh }, 'Navrhnout rozdělení'),
+      navrhy.length > 0 && h('button', { class: 'btn btn-secondary', onclick: potvrditVseNavrhy },
+        'Potvrdit všechny návrhy (' + navrhy.length + ')'),
+      nesparovano.length > 0 && h('span', { style: 'font-size:13px;color:var(--muted)' },
+        'Nespárovaná tiskárna (chybí v registru): '
+        + nesparovano.map(([nazev, n]) => nazev + ' (' + n + ' ks)').join(', '))),
     h('div', { class: 'tabule' },
-      h('div', { class: 'sloupce' }, stroje.map(strojSloupec))));
+      h('div', { class: 'sloupce' }, stroje.map(s => strojSloupec(s, navrhy)))));
 }
 
-function pozadavkyPanel() {
-  const d = S.pozadavky;
-  if (!d || !d.pozadavky.length) return null;
-  const nesparovano = Object.entries(d.nesparovaneTiskarny || {});
-
-  return h('div', { class: 'pruh-filtru', style: 'flex-direction:column;align-items:stretch;gap:var(--space-2)' },
-    h('div', { style: 'font-weight:600' }, 'Co je potřeba vytisknout'),
-    d.pozadavky.map(pozadavekRadek),
-    nesparovano.length > 0 && h('div', { style: 'font-size:13px;color:var(--muted)' },
-      'Nespárovaná tiskárna (chybí v registru tiskáren): '
-      + nesparovano.map(([nazev, n]) => nazev + ' (' + n + ' ks)').join(', ')));
+async function obnovNavrh() {
+  S.navrh = await api('navrh');
+  vykresli();
 }
 
-function pozadavekRadek(x) {
-  const klic = x.tiskarnaId + '|' + x.material + '|' + x.nazev;
-  if (!S.pozTisk) S.pozTisk = {};
-  if (S.pozTisk[klic] === undefined) S.pozTisk[klic] = x.zbyva;
-  const tisknout = Math.max(1, Math.min(x.zbyva, +S.pozTisk[klic] || 1));
-
-  const stroje = S.stroje.filter(s => s.tiskarnaId === x.tiskarnaId && s.aktivni);
-  if (!S.pozStroj) S.pozStroj = {};
-  if (S.pozStroj[klic] === undefined) S.pozStroj[klic] = stroje[0] ? stroje[0].id : null;
-
-  const hrefZip = 'soubory-zip.php?' + x.zakazky.map(z => 'p[]=' + z.polozkaId).join('&');
-
-  return h('div', { style: 'display:flex;flex-direction:column;gap:2px' },
-    h('div', { style: 'display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2)' },
-      h('span', { style: 'min-width:280px' },
-        h('strong', {}, x.nazev), ' · ' + x.material + ' · ' + x.tiskarna + ' — ' + zakazek(x.zakazek)),
-      h('span', { style: 'color:var(--muted-2)' }, 'zbývá ' + x.zbyva + ' ks (~' + x.odhadUloh + ' úloh)'),
-      h('label', { style: 'display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted-2)' },
-        'tisknout',
-        h('input', { class: 'input', type: 'number', min: '1', max: String(x.zbyva), value: tisknout,
-          style: 'width:70px;padding:4px 6px',
-          onchange: e => { S.pozTisk[klic] = Math.max(1, Math.min(x.zbyva, +e.target.value || 1)); vykresli(); } }),
-        'ks'),
-      stroje.length > 1
-        ? h('select', { class: 'input', style: 'width:auto;padding:4px 6px',
-            onchange: e => { S.pozStroj[klic] = +e.target.value; } },
-            stroje.map(s => h('option', { value: s.id, selected: s.id === S.pozStroj[klic] }, s.oznaceni)))
-        : h('span', { style: 'color:var(--muted-2);font-size:13px' }, stroje[0] ? stroje[0].oznaceni : '— chybí aktivní stroj —'),
-      h('a', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px', href: hrefZip, target: '_blank' },
-        'Stáhnout modely'),
-      h('button', { class: 'btn btn-secondary', style: 'padding:2px 10px;font-size:12px',
-        disabled: !S.pozStroj[klic],
-        onclick: () => vytisknout(x, klic, tisknout) },
-        'Vytisknout')),
-    h('div', { style: 'font-size:12px;color:var(--muted);padding-left:2px' },
-      'zakázky: ', x.zakazky.map((z, i) => [
-        i > 0 && ', ',
-        h('a', { href: '#', style: 'color:var(--muted);text-decoration:underline',
-          onclick: e => { e.preventDefault(); S.view = 'board'; vykresli(); otevri(z.cislo); } },
-          z.cislo + ' (' + z.zbyva + ' ks)'),
-      ])));
+async function potvrditVseNavrhy() {
+  const navrhy = (S.navrh && S.navrh.navrhy) || [];
+  for (const n of navrhy) {
+    try { await api('navrh-potvrdit', { tiskarnaId: n.tiskarnaId, material: n.material, strojId: n.strojId, polozkaIds: n.polozkaIds }); }
+    catch (e) { hlas(e); }
+  }
+  await obnovNavrhAVyrobu();
 }
 
-async function vytisknout(x, klic, pocet) {
-  const strojId = S.pozStroj[klic];
-  try {
-    await api('pozadavek-vytisknout', { tiskarnaId: x.tiskarnaId, material: x.material, nazev: x.nazev, strojId, pocet });
-  } catch (e) { hlas(e); }
-  S.pozadavky = await api('pozadavky');
+async function obnovNavrhAVyrobu() {
+  S.navrh = await api('navrh');
   S.vyroba = (await api('vyroba')).stroje;
   vykresli();
 }
 
-function strojSloupec(s) {
+function strojSloupec(s, navrhy) {
+  const proStroj = navrhy.filter(n => n.strojId === s.strojId);
   return h('section', { class: 'sloupec', style: 'width:300px' },
     h('div', { class: 'sloupec-hlavicka' },
       h('h4', {}, s.tiskarna + ' · ' + s.oznaceni),
@@ -1129,9 +1092,45 @@ function strojSloupec(s) {
     s.fronta.length > 0 && h('div', { style: 'font-size:13px;color:var(--muted-2);padding:0 var(--space-2) var(--space-2)' },
       'hotovo nejdřív ' + dt(s.hotovoNejdrive) + ' · ' + hod(s.celkemHodin) + ' h'),
     h('div', { class: 'sloupec-karty' },
-      s.fronta.length === 0
+      s.fronta.length === 0 && proStroj.length === 0
         ? h('div', { style: 'font-size:15px;color:var(--muted);padding:var(--space-2)' }, 'Fronta je prázdná')
-        : s.fronta.map(u => ulohaKarta(u, s.strojId))));
+        : [s.fronta.map(u => ulohaKarta(u, s.strojId)), proStroj.map(n => navrhKarta(n))]));
+}
+
+function navrhKarta(n) {
+  const klic = n.tiskarnaId + '|' + n.material + '|' + n.strojId + '|' + n.polozkaIds.join(',');
+  const jineStroje = S.stroje.filter(s => s.tiskarnaId === n.tiskarnaId && s.aktivni && s.id !== n.strojId);
+  const hrefZip = 'soubory-zip.php?' + n.polozkaIds.map(id => 'p[]=' + id).join('&');
+
+  return h('article', { class: 'card karta', style: 'border-left-color:var(--teal);border-style:dashed' },
+    h('div', { class: 'telo' },
+      h('div', { class: 'radek1' },
+        h('span', { class: 'cislo' }, n.material || '—'),
+        h('span', { class: 'prio', style: 'color:var(--teal-700)' }, 'návrh')),
+      h('div', { class: 'radek2' },
+        h('div', { style: 'min-width:0' },
+          h('div', { class: 'zakaznik' }, n.dily.map(d => d.pocet + '× ' + d.nazev).join(', ') || '—'),
+          h('div', { class: 'souhrn' }, n.zakazky.join(', ')))),
+      h('div', { class: 'radek3', style: 'flex-wrap:wrap;gap:6px' },
+        jineStroje.length > 0 && h('select', { class: 'input', style: 'width:auto;padding:2px 6px;font-size:12px',
+            onchange: e => presunNavrh(n, +e.target.value) },
+          h('option', { value: n.strojId }, 'zde'),
+          jineStroje.map(s => h('option', { value: s.id }, 'přesunout na ' + s.oznaceni))),
+        h('a', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px', href: hrefZip, target: '_blank' },
+          'Modely'),
+        h('button', { class: 'btn btn-secondary', style: 'padding:2px 8px;font-size:12px',
+          onclick: () => potvrdNavrh(n) }, 'Potvrdit'))));
+}
+
+async function presunNavrh(n, novyStrojId) {
+  if (novyStrojId === n.strojId) return;
+  n.strojId = novyStrojId;
+  vykresli();
+}
+async function potvrdNavrh(n) {
+  try { await api('navrh-potvrdit', { tiskarnaId: n.tiskarnaId, material: n.material, strojId: n.strojId, polozkaIds: n.polozkaIds }); }
+  catch (e) { hlas(e); }
+  await obnovNavrhAVyrobu();
 }
 
 function ulohaKarta(u, strojId) {

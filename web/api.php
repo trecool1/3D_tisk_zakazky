@@ -494,18 +494,18 @@ try {
       odesliJson(['ok' => true]);
     }
 
-    case 'pozadavky': {
+    case 'navrh': {
       vyzadujPrihlaseni();
-      odesliJson(array_merge(['ok' => true], pozadavkyVyroby()));
+      odesliJson(array_merge(['ok' => true], navrhDavek()));
     }
 
-    case 'pozadavek-vytisknout': {
+    case 'navrh-potvrdit': {
       vyzadujZapis();
-      $r = ulohaZalozRucne(
-        (int)($v['tiskarnaId'] ?? 0), (string)($v['material'] ?? ''), (string)($v['nazev'] ?? ''),
-        (int)($v['strojId'] ?? 0), (int)($v['pocet'] ?? 0));
-      if (!$r) chyba('Úlohu se nepodařilo založit (žádné čekající díly, nebo stroj nepatří k tiskárně?).', 400);
-      odesliJson(['ok' => true, 'ulohaId' => $r['ulohaId'], 'alokovano' => $r['alokovano']]);
+      $id = navrhPotvrdit(
+        (int)($v['tiskarnaId'] ?? 0), (string)($v['material'] ?? ''), (int)($v['strojId'] ?? 0),
+        array_map('intval', (array)($v['polozkaIds'] ?? [])));
+      if (!$id) chyba('Úlohu se nepodařilo založit (mezitím už byly díly naplánované jinam?).', 400);
+      odesliJson(['ok' => true, 'ulohaId' => $id]);
     }
 
     /* ---------- nastavení (jen Admin) ---------- */
