@@ -52,7 +52,7 @@ echo "šablony připraveny\n";
 
 foreach (['prahVysoka' => '24', 'prahNormalni' => '72', 'dnyBezOdpovedi' => '5',
           'infoMaily' => '0', 'infoMailyKam' => '',
-          'koopPartner' => '', 'koopLhutaDnu' => '5', 'koopDopravaDnu' => '2'] as $k => $v) {
+          'koopPartner' => '', 'koopLhutaDnu' => '5', 'koopDopravaDnu' => '2', 'davkaPraH' => '0.8'] as $k => $v) {
   db()->prepare('INSERT OR IGNORE INTO nastaveni (klic, hodnota) VALUES (?,?)')->execute([$k, $v]);
 }
 echo "nastavení připraveno\n";

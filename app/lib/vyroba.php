@@ -122,3 +122,167 @@ function ulohaStavZmen(int $id, string $novy): void {
     db()->prepare('UPDATE tiskove_ulohy SET stav = ? WHERE id = ?')->execute([$novy, $id]);
   }
 }
+
+/* ---------- dávkování a čekárna ---------- */
+
+// Expres (Do 24 h / Expres…) obchází dávkování — poznáme podle ceníku (maxHours
+// > 0), ne podle natvrdo napsaného českého názvu.
+function jeExpres(string $rychlost): bool {
+  $s = pricingNajdi('speeds', $rychlost);
+  return $s !== null && (float)($s['maxHours'] ?? 0) > 0;
+}
+
+/** Díly, které ještě nejsou přiřazené do žádné tiskové úlohy, u otevřených zakázek. */
+function nenaplanovanePolozky(): array {
+  return db()->query(
+    "SELECT p.* FROM polozky p
+       JOIN zakazky z ON z.id = p.zakazka_id
+      WHERE z.stav NOT IN ('hotovo','odlozeno')
+        AND NOT EXISTS (SELECT 1 FROM uloha_polozky up WHERE up.polozka_id = p.id)
+      ORDER BY z.cislo, p.poradi")->fetchAll();
+}
+
+/**
+ * Přehled čekajících dávek podle (tiskárna, materiál) — jen standardní rychlost,
+ * expres se nedávkuje. Naplnění = kolik "jobů" dohromady díly zaberou (perJob
+ * z kalkulátoru). Tiskárny, které se nepodařilo spárovat podle názvu (osiřelý
+ * text u starší zakázky), se hlásí zvlášť, ať je vidět, že chybí ruční přiřazení.
+ */
+function poolyPrehled(): array {
+  $prah = (float)nastaveni('davkaPraH', '0.8');
+  $skupiny = [];
+  $nesparovano = [];
+
+  foreach (nenaplanovanePolozky() as $p) {
+    if (jeExpres($p['rychlost'])) continue;
+    $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
+    if (!$t) { $nesparovano[$p['tiskarna_nazev']] = ($nesparovano[$p['tiskarna_nazev']] ?? 0) + 1; continue; }
+
+    $klic = $t['id'] . '|' . $p['material'];
+    if (!isset($skupiny[$klic])) {
+      $skupiny[$klic] = ['tiskarnaId' => $t['id'], 'tiskarna' => $t['nazev'], 'material' => $p['material'],
+                          'fill' => 0.0, 'dilu' => 0, 'zakazky' => []];
+    }
+    $skupiny[$klic]['fill'] += (int)$p['pocet'] / max(1, (int)$p['perjob']);
+    $skupiny[$klic]['dilu']++;
+    $skupiny[$klic]['zakazky'][(int)$p['zakazka_id']] = true;
+  }
+
+  $davky = array_map(fn($s) => [
+    'tiskarnaId' => $s['tiskarnaId'], 'tiskarna' => $s['tiskarna'], 'material' => $s['material'],
+    'fill' => round($s['fill'], 2), 'dilu' => $s['dilu'], 'zakazek' => count($s['zakazky']),
+    'pripraveno' => $s['fill'] >= $prah,
+  ], array_values($skupiny));
+  usort($davky, fn($a, $b) => $b['fill'] <=> $a['fill']);
+
+  return ['davky' => $davky, 'nesparovaneTiskarny' => $nesparovano, 'prah' => $prah];
+}
+
+/** Aktivní stroj daného typu s nejmenší zátěží ve frontě (rozložení mezi víc kusů). */
+function strojNejmeneVytizeny(int $tiskarnaId): ?int {
+  $q = db()->prepare('SELECT id FROM stroje WHERE tiskarna_id = ? AND aktivni = 1');
+  $q->execute([$tiskarnaId]);
+  $nejlepsiId = null; $nejmensiHodin = null;
+  foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $strojId) {
+    $fronta   = frontaStroje((int)$strojId);
+    $posledni = $fronta ? $fronta[count($fronta) - 1] : null;
+    $hodin    = $posledni ? $posledni['kumulativneHodin'] : 0.0;
+    if ($nejmensiHodin === null || $hodin < $nejmensiHodin) { $nejmensiHodin = $hodin; $nejlepsiId = (int)$strojId; }
+  }
+  return $nejlepsiId;
+}
+
+/**
+ * Založí tiskovou úlohu ze zadaných dílů na nejméně vytíženém stroji daného typu.
+ * Odhad hodin: díly stejné zakázky+varianty sdílí jeden job (hodiny se neopakují
+ * za každý díl, viz prijmiPoptavku), různé zakázky se v jedné dávce reálně tisknou
+ * na jedné desce zároveň — bereme tedy MAX přes skupiny, ne součet (zjednodušený
+ * odhad, ne plnohodnotné skládání jako v kalkulátoru).
+ */
+function ulohaZaloz(int $tiskarnaId, string $material, array $polozky, bool $expres): ?int {
+  if (!$polozky) return null;
+  $strojId = strojNejmeneVytizeny($tiskarnaId);
+  if (!$strojId) return null;
+
+  $skupiny = [];
+  foreach ($polozky as $p) {
+    $klic = $p['zakazka_id'] . '|' . $p['tiskarna_nazev'] . '|' . $p['rychlost'];
+    if (!isset($skupiny[$klic])) {
+      $skupiny[$klic] = ['tisk' => (float)$p['hodiny_tisku'], 'chlad' => (float)$p['hodiny_schnuti']];
+    }
+  }
+  $hodinTisk = 0.0; $hodinChlad = 0.0;
+  foreach ($skupiny as $s) { $hodinTisk = max($hodinTisk, $s['tisk']); $hodinChlad = max($hodinChlad, $s['chlad']); }
+
+  $poradi = $expres ? prvniPoradiStroje($strojId) : dalsiPoradiStroje($strojId);
+
+  db()->prepare('INSERT INTO tiskove_ulohy (stroj_id, tiskarna_id, material, poradi,
+                                             odhad_hodin_tisk, odhad_hodin_chladnuti, stav, expres)
+                 VALUES (?,?,?,?,?,?,"fronta",?)')
+      ->execute([$strojId, $tiskarnaId, $material, $poradi, round($hodinTisk, 2), round($hodinChlad, 2),
+                 $expres ? 1 : 0]);
+  $ulohaId = (int)db()->lastInsertId();
+
+  $ins = db()->prepare('INSERT OR IGNORE INTO uloha_polozky (uloha_id, polozka_id, pocet) VALUES (?,?,?)');
+  foreach ($polozky as $p) $ins->execute([$ulohaId, (int)$p['id'], (int)$p['pocet']]);
+
+  return $ulohaId;
+}
+
+function dalsiPoradiStroje(int $strojId): int {
+  $q = db()->prepare('SELECT MAX(poradi) FROM tiskove_ulohy WHERE stroj_id = ? AND stav IN ("fronta","tiskne")');
+  $q->execute([$strojId]);
+  $v = $q->fetchColumn();
+  return $v === null ? 0 : ((int)$v) + 1;
+}
+
+function prvniPoradiStroje(int $strojId): int {
+  $q = db()->prepare('SELECT MIN(poradi) FROM tiskove_ulohy WHERE stroj_id = ? AND stav IN ("fronta","tiskne")');
+  $q->execute([$strojId]);
+  $v = $q->fetchColumn();
+  return $v === null ? 0 : ((int)$v) - 1;
+}
+
+/** Nad prahem (nebo vynuceně) založí úlohu ze všech čekajících dílů dané (tiskárna, materiál). */
+function poolPromuj(int $tiskarnaId, string $material, bool $vynutit = false): ?int {
+  $prah = (float)nastaveni('davkaPraH', '0.8');
+
+  $vyhovujici = array_values(array_filter(nenaplanovanePolozky(), function ($p) use ($tiskarnaId, $material) {
+    if (jeExpres($p['rychlost']) || $p['material'] !== $material) return false;
+    $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
+    return $t && (int)$t['id'] === $tiskarnaId;
+  }));
+  if (!$vyhovujici) return null;
+
+  $fill = 0.0;
+  foreach ($vyhovujici as $p) $fill += (int)$p['pocet'] / max(1, (int)$p['perjob']);
+  if (!$vynutit && $fill < $prah) return null;
+
+  return ulohaZaloz($tiskarnaId, $material, $vyhovujici, false);
+}
+
+/** Expresní díly zakázky nikdy nečekají — hned na začátek fronty vhodného stroje. */
+function ulohaExpresProZakazku(int $zakazkaId): array {
+  $q = db()->prepare(
+    "SELECT p.* FROM polozky p
+      WHERE p.zakazka_id = ? AND NOT EXISTS (SELECT 1 FROM uloha_polozky up WHERE up.polozka_id = p.id)");
+  $q->execute([$zakazkaId]);
+
+  $skupiny = [];
+  foreach ($q->fetchAll() as $p) {
+    if (!jeExpres($p['rychlost'])) continue;
+    $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
+    if (!$t) continue;
+    $klic = $t['id'] . '|' . $p['material'];
+    $skupiny[$klic]['tiskarnaId'] = (int)$t['id'];
+    $skupiny[$klic]['material']   = $p['material'];
+    $skupiny[$klic]['polozky'][]  = $p;
+  }
+
+  $vytvorene = [];
+  foreach ($skupiny as $s) {
+    $id = ulohaZaloz($s['tiskarnaId'], $s['material'], $s['polozky'], true);
+    if ($id) $vytvorene[] = $id;
+  }
+  return $vytvorene;
+}

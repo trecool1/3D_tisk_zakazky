@@ -77,7 +77,7 @@ const S = {
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
   smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false,
   firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
-  nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], dragUloha: null, pubCislo: null, kopirovano: false,
+  nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], davky: null, dragUloha: null, pubCislo: null, kopirovano: false,
   chyba: '', nacitam: false,
 };
 
@@ -264,7 +264,7 @@ async function prepniPohled(k) {
     if (k === 'customers') { S.firmy = (await api('firmy')).firmy; if (!S.firmaKlic && S.firmy[0]) S.firmaKlic = S.firmy[0].klic; }
     if (k === 'mail')      S.posta = (await api('posta&filtr=' + S.postaFiltr)).posta;
     if (k === 'inbox')     S.nezarazeno = await api('nezarazeno');
-    if (k === 'production') S.vyroba = (await api('vyroba')).stroje;
+    if (k === 'production') { S.vyroba = (await api('vyroba')).stroje; S.davky = await api('davky'); }
     if (k === 'settings')  {
       S.nastaveniData = await api('nastaveni');
       const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
@@ -1061,8 +1061,37 @@ function obrazovkaVyroba() {
   const stroje = S.vyroba || [];
   if (!stroje.length) return h('div', { class: 'hlaska' }, 'Žádné aktivní stroje. Přidej je v Nastavení.');
 
-  return h('div', { class: 'tabule' },
-    h('div', { class: 'sloupce' }, stroje.map(strojSloupec)));
+  return h('div', { style: 'display:flex;flex-direction:column;flex:1;min-height:0' },
+    davkyPanel(),
+    h('div', { class: 'tabule' },
+      h('div', { class: 'sloupce' }, stroje.map(strojSloupec))));
+}
+
+function davkyPanel() {
+  const d = S.davky;
+  if (!d || !d.davky.length) return null;
+  const nesparovano = Object.entries(d.nesparovaneTiskarny || {});
+
+  return h('div', { class: 'pruh-filtru', style: 'flex-direction:column;align-items:stretch;gap:var(--space-2)' },
+    h('div', { style: 'font-weight:600' }, 'Čekající dávky (práh ' + Math.round(d.prah * 100) + ' %)'),
+    d.davky.map(x => h('div', { style: 'display:flex;align-items:center;gap:var(--space-2)' },
+      h('span', { style: 'min-width:220px' }, x.tiskarna + ' · ' + x.material),
+      h('span', { style: 'color:var(--muted-2)' }, x.dilu + ' dílů / ' + x.zakazek + ' zakázek'),
+      h('span', { style: 'font-weight:600;color:' + (x.pripraveno ? 'var(--teal-700)' : 'var(--muted)') },
+        Math.round(x.fill * 100) + ' %'),
+      h('button', { class: 'btn btn-secondary', style: 'padding:2px 10px;font-size:12px',
+        onclick: () => spustDavku(x.tiskarnaId, x.material) },
+        x.pripraveno ? 'Spustit dávku teď' : 'Spustit i tak (pod prahem)'))),
+    nesparovano.length > 0 && h('div', { style: 'font-size:13px;color:var(--muted)' },
+      'Nespárovaná tiskárna (chybí v registru): '
+      + nesparovano.map(([nazev, n]) => nazev + ' (' + n + ')').join(', ')));
+}
+
+async function spustDavku(tiskarnaId, material) {
+  try { await api('davka-spustit', { tiskarnaId, material }); } catch (e) { hlas(e); }
+  S.davky = await api('davky');
+  S.vyroba = (await api('vyroba')).stroje;
+  vykresli();
 }
 
 function strojSloupec(s) {
@@ -1342,7 +1371,10 @@ function obrazovkaNastaveni() {
         pole('Normální priorita, pokud je rezerva pod (h)', 'prahNormalni'),
         pole('Upozornit na neodpovězenou nabídku po (dnech)', 'dnyBezOdpovedi'),
         h('div', { style: 'font-size:13px;color:var(--muted)' },
-          'Rezerva = hodiny do termínu − (tisk + schnutí + manipulace + přeprava u externích). Hodnoty přicházejí z kalkulátoru.'))),
+          'Rezerva = hodiny do termínu − (tisk + schnutí + manipulace + přeprava u externích). Hodnoty přicházejí z kalkulátoru.'),
+        pole('Práh naplnění dávky (0–1, kdy se standardní zakázky automaticky spustí do tisku)', 'davkaPraH'),
+        h('div', { style: 'font-size:13px;color:var(--muted)' },
+          'Naplnění = kolik "jobů" dohromady čekající díly stejné tiskárny a materiálu zaberou. Expresní zakázky dávkování obcházejí.'))),
 
     /* informační e-maily */
     h('section', {},

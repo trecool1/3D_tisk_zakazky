@@ -20,6 +20,9 @@
 # PULL poptávek z poptavky/objednavky.json kalkulátoru (tiše, bez e-mailů z kanbanu)
 */1 * * * * php /var/www/kanban-app/cron/import-kalkulator.php --bez-mailu >> /var/www/kanban-data/cron.log 2>&1
 
+# dávkování tiskových úloh: expres hned do fronty, standardní dávky nad práh naplnění
+*/1 * * * * php /var/www/kanban-app/cron/davky.php               >> /var/www/kanban-data/cron.log 2>&1
+
 # ranní přehled dílně: co tisknout, co expedovat, po termínu, neodpovězené nabídky
 10 7 * * *   php /var/www/kanban-app/cron/denni.php             >> /var/www/kanban-data/cron.log 2>&1
 
