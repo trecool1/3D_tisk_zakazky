@@ -9,6 +9,7 @@ require KANBAN_APP . '/lib/auth.php';
 require KANBAN_APP . '/lib/zakazky.php';
 require KANBAN_APP . '/lib/pricing.php';
 require KANBAN_APP . '/lib/tiskarny.php';
+require KANBAN_APP . '/lib/vyroba.php';
 
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit('Jen z příkazové řádky.'); }
 
@@ -16,9 +17,7 @@ schemaAktualizuj();
 echo "schéma připraveno\n";
 
 $sloupce = [
-  ['nova',        'Nová poptávka',      0],
-  ['nabidka',     'Nabídka poslána',    0],
-  ['schvaleno',   'Schváleno',          0],
+  ['prijato',     'Přijato',            0],
   ['fronta',      'Ve frontě na tisk',  0],
   ['tisk',        'Tiskne se',          0],
   ['postprocess', 'Postprocess',        0],
@@ -26,11 +25,24 @@ $sloupce = [
   ['hotovo',      'Hotovo',             0],
   ['odlozeno',    'Odloženo / Zrušeno', 1],
 ];
+// Migrace ze starého poptávkového trychtýře (nova/nabidka/schváleno): kalkulátor
+// dnes posílá rovnou závazné objednávky, takže se všechny tři slévají do Přijato.
+if ((int)db()->query("SELECT COUNT(*) FROM sloupce WHERE klic = 'nova'")->fetchColumn() > 0) {
+  db()->exec("UPDATE zakazky SET stav = 'prijato' WHERE stav IN ('nova','nabidka','schvaleno')");
+  db()->exec("DELETE FROM sloupce WHERE klic IN ('nabidka','schvaleno')");
+  db()->exec("UPDATE sloupce SET klic = 'prijato', nazev = 'Přijato' WHERE klic = 'nova'");
+  echo "sloupce zmigrovány (nova/nabidka/schvaleno -> prijato)\n";
+}
 foreach ($sloupce as $i => [$klic, $nazev, $skryt]) {
   db()->prepare('INSERT OR IGNORE INTO sloupce (klic, nazev, poradi, skryt) VALUES (?,?,?,?)')
       ->execute([$klic, $nazev, $i, $skryt]);
+  db()->prepare('UPDATE sloupce SET poradi = ? WHERE klic = ?')->execute([$i, $klic]);
 }
 echo "sloupce připraveny\n";
+
+// dožene sloupec karty podle už existujících tiskových úloh (např. po téhle migraci)
+synchronizujStavZakazek(db()->query('SELECT id FROM zakazky')->fetchAll(PDO::FETCH_COLUMN));
+echo "stav karet dosynchronizován s výrobou\n";
 
 $sablony = [
   ['potvrzeni', 'Potvrzení poptávky', 'Přijali jsme vaši poptávku [{cislo}]',
@@ -50,7 +62,7 @@ foreach ($sablony as $i => [$klic, $nazev, $predmet, $telo]) {
 }
 echo "šablony připraveny\n";
 
-foreach (['prahVysoka' => '24', 'prahNormalni' => '72', 'dnyBezOdpovedi' => '5',
+foreach (['prahVysoka' => '24', 'prahNormalni' => '72',
           'infoMaily' => '0', 'infoMailyKam' => '',
           'koopPartner' => '', 'koopLhutaDnu' => '5', 'koopDopravaDnu' => '2', 'davkaPraH' => '0.8'] as $k => $v) {
   db()->prepare('INSERT OR IGNORE INTO nastaveni (klic, hodnota) VALUES (?,?)')->execute([$k, $v]);

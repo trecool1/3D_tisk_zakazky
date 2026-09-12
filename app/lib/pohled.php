@@ -9,7 +9,6 @@ function zakazkaProSeznam(array $z): array {
   $koop  = koopOperace($z);
   $prio  = prioritaZakazky($z);
   $dnu   = dnyDoTerminu($z);
-  $ceka  = cekaDnu($z);
   $pol   = polozky((int)$z['id']);
   $konf  = jsonDek($z['konfigurace'], []);
   $ks    = array_sum(array_map(fn($p) => (int)$p['pocet'], $pol));
@@ -37,7 +36,6 @@ function zakazkaProSeznam(array $z): array {
     'schvalilZakaznik' => $z['stav'] === 'schvaleno' && (int)($z['schvaleno_videno'] ?? 1) === 0,
     'modelyChybi'  => (int)$z['modely_chybi'] === 1,
     'nedorucitelny'=> (int)$z['nedorucitelny'] === 1,
-    'cekaDnu'      => $ceka,
     'zdroj'        => $z['zdroj'],
     'nahledMm'     => $pol ? max(jsonDek($pol[0]['bbox'], [0,0,0])) : 0,
     'maSoubory'    => count($soub) > 0,
@@ -60,7 +58,7 @@ function historieFirmy(array $z, bool $bezSebe = true): array {
 }
 
 function stalyZakaznik(array $z): ?array {
-  if ($z['stav'] !== 'nova') return null;
+  if ($z['stav'] !== 'prijato') return null;
   $h = historieFirmy($z);
   if (!$h) return null;
   return ['pocet' => count($h), 'naposledy' => substr((string)$h[0]['termin'], 0, 10)];

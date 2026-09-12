@@ -41,8 +41,10 @@ $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 if ($z) {
   $kal   = jsonDek($z['kalkulace'], []);
   $pol   = polozky((int)$z['id']);
-  $faze  = ['nova' => 0, 'nabidka' => 1, 'schvaleno' => 1, 'fronta' => 2, 'tisk' => 2,
-            'postprocess' => 2, 'expedice' => 3, 'hotovo' => 3, 'odlozeno' => 1];
+  // staré nova/nabidka/schvaleno se po migraci na produkční tok už nevyskytují,
+  // klíče zůstávají jen pro velmi staré odkazy vydané před přechodem
+  $faze  = ['nova' => 0, 'prijato' => 0, 'nabidka' => 1, 'schvaleno' => 1, 'fronta' => 1, 'tisk' => 1,
+            'postprocess' => 2, 'expedice' => 3, 'hotovo' => 3, 'odlozeno' => 0];
   $stage = $faze[$z['stav']] ?? 0;
 }
 ?><!DOCTYPE html>
@@ -76,7 +78,7 @@ if ($z) {
     </div>
 
     <div style="display:flex;gap:var(--space-1);margin-bottom:var(--space-6);flex-wrap:wrap">
-      <?php foreach (['Přijato','Nabídka','Ve výrobě','Expedováno'] as $i => $label): ?>
+      <?php foreach (['Přijato','Ve výrobě','Dokončujeme','Expedováno'] as $i => $label): ?>
         <div style="flex:1;min-width:120px">
           <div style="height:4px;background:<?= $i <= $stage ? 'var(--teal)' : 'var(--line)' ?>"></div>
           <div style="font-size:14px;margin-top:6px;color:<?= $i <= $stage ? 'var(--ink)' : 'var(--muted)' ?>"><?= $label ?></div>

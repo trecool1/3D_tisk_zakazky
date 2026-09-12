@@ -40,12 +40,13 @@ foreach ($objednavky as $d) {
 
   try {
     $z = prijmiPoptavku($d, $soubory);
-    // stav z kalkulátoru, pokud ho poslal
+    // stav z kalkulátoru, pokud ho poslal (dnes vždy "prijata" — mapa je pro budoucí použití)
     if (!empty($d['status']) && $d['status'] !== 'prijata') {
-      $mapa = ['nabidka' => 'nabidka', 'schvalena' => 'schvaleno', 'vyroba' => 'fronta',
-               'expedovana' => 'expedice', 'hotova' => 'hotovo', 'zrusena' => 'odlozeno'];
+      $mapa = ['vyroba' => 'fronta', 'expedovana' => 'expedice', 'hotova' => 'hotovo', 'zrusena' => 'odlozeno'];
       if (isset($mapa[$d['status']])) {
-        db()->prepare('UPDATE zakazky SET stav = ? WHERE id = ?')->execute([$mapa[$d['status']], (int)$z['id']]);
+        // explicitní stav z kalkulátoru vypíná automatické sledování podle výroby
+        db()->prepare('UPDATE zakazky SET stav = ?, stav_auto = 0 WHERE id = ?')
+            ->execute([$mapa[$d['status']], (int)$z['id']]);
       }
     }
     if (!empty($d['assignee'])) {

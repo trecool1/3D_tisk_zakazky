@@ -121,6 +121,54 @@ function ulohaStavZmen(int $id, string $novy): void {
   } else {
     db()->prepare('UPDATE tiskove_ulohy SET stav = ? WHERE id = ?')->execute([$novy, $id]);
   }
+
+  $q = db()->prepare('SELECT DISTINCT p.zakazka_id FROM uloha_polozky up
+                        JOIN polozky p ON p.id = up.polozka_id WHERE up.uloha_id = ?');
+  $q->execute([$id]);
+  synchronizujStavZakazek($q->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
+ * Sloupec karty odvozený ze stavu jejích tiskových úloh — dokud díly nejsou
+ * naplánované, karta zůstává v Přijato; jakmile se cokoli tiskne, jde do Tiskne se;
+ * jakmile jsou všechny plánované díly hotové, jde do Postprocess (dál už jen ručně).
+ */
+function stavZakazkyPodleUloh(int $zakazkaId): ?string {
+  $qCelkem = db()->prepare('SELECT COUNT(*) FROM polozky WHERE zakazka_id = ?');
+  $qCelkem->execute([$zakazkaId]);
+  $celkem = (int)$qCelkem->fetchColumn();
+  if ($celkem === 0) return null;
+
+  $qNaplan = db()->prepare('SELECT COUNT(DISTINCT p.id) FROM polozky p
+                              JOIN uloha_polozky up ON up.polozka_id = p.id WHERE p.zakazka_id = ?');
+  $qNaplan->execute([$zakazkaId]);
+  $naplanovano = (int)$qNaplan->fetchColumn();
+  if ($naplanovano === 0) return 'prijato';
+
+  $qStavy = db()->prepare('SELECT DISTINCT u.stav FROM uloha_polozky up
+                             JOIN polozky p ON p.id = up.polozka_id
+                             JOIN tiskove_ulohy u ON u.id = up.uloha_id
+                            WHERE p.zakazka_id = ?');
+  $qStavy->execute([$zakazkaId]);
+  $stavy = $qStavy->fetchAll(PDO::FETCH_COLUMN);
+
+  if (in_array('tiskne', $stavy, true)) return 'tisk';
+  if ($naplanovano === $celkem && $stavy === ['hotovo']) return 'postprocess';
+  return 'fronta';
+}
+
+/** Přepočte a uloží automatický stav (jen u karet, které to mají zapnuté). */
+function synchronizujStavZakazek(array $zakazkaIds): void {
+  foreach (array_unique($zakazkaIds) as $zid) {
+    $q = db()->prepare('SELECT id, stav FROM zakazky WHERE id = ? AND stav_auto = 1');
+    $q->execute([(int)$zid]);
+    $z = $q->fetch();
+    if (!$z) continue;
+    $novy = stavZakazkyPodleUloh((int)$zid);
+    if ($novy === null || $novy === $z['stav']) continue;
+    db()->prepare('UPDATE zakazky SET stav = ?, zmeneno = ? WHERE id = ?')->execute([$novy, ted(), (int)$zid]);
+    systemovyZaznam((int)$zid, 'Automaticky přesunuto do ' . nazevSloupce($novy) . ' (podle stavu výroby)');
+  }
 }
 
 /* ---------- dávkování a čekárna ---------- */
@@ -225,6 +273,8 @@ function ulohaZaloz(int $tiskarnaId, string $material, array $polozky, bool $exp
 
   $ins = db()->prepare('INSERT OR IGNORE INTO uloha_polozky (uloha_id, polozka_id, pocet) VALUES (?,?,?)');
   foreach ($polozky as $p) $ins->execute([$ulohaId, (int)$p['id'], (int)$p['pocet']]);
+
+  synchronizujStavZakazek(array_map(fn($p) => (int)$p['zakazka_id'], $polozky));
 
   return $ulohaId;
 }

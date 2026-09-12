@@ -101,18 +101,6 @@ function maNeprectenou(int $zakazkaId): bool {
   return (bool)$q->fetchColumn();
 }
 
-// kolik dní čekáme na odpověď od poslední odchozí zprávy
-function cekaDnu(array $z): int {
-  if ($z['stav'] !== 'nabidka') return 0;
-  $q = db()->prepare('SELECT kdy FROM zpravy WHERE zakazka_id = ? AND typ = "odchozi" ORDER BY kdy DESC LIMIT 1');
-  $q->execute([(int)$z['id']]);
-  $kdy = $q->fetchColumn();
-  if (!$kdy) return 0;
-  $a = new DateTimeImmutable(substr((string)$kdy, 0, 10) . ' 00:00:00');
-  $b = new DateTimeImmutable('today 00:00:00');
-  return max(0, (int)floor(($b->getTimestamp() - $a->getTimestamp()) / 86400));
-}
-
 /* ---------- firmy ---------- */
 
 const VOLNE_DOMENY = ['gmail.com','seznam.cz','email.cz','outlook.com','hotmail.com','icloud.com'];

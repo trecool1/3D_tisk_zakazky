@@ -456,8 +456,6 @@ function karta(z) {
   if (z.schvalilZakaznik)   znacka = ['✓ zákazník schválil nabídku', 'var(--teal)', '#fff'];
   else if (z.modelyChybi)   znacka = ['modely chybí', 'var(--red-100)', 'var(--red)'];
   else if (z.nedorucitelny) znacka = ['e-mail se nedoručil', 'var(--red-100)', 'var(--red)'];
-  else if (z.cekaDnu >= (S.nastaveni.dnyBezOdpovedi || 5))
-    znacka = ['čeká na odpověď — ' + dny(z.cekaDnu), 'var(--teal-100)', 'var(--teal-700)'];
   else if (z.stalyZakaznik)
     znacka = ['stálý zákazník · ' + z.stalyZakaznik.pocet + '× tištěno, naposledy '
               + dm(z.stalyZakaznik.naposledy), 'var(--teal-100)', 'var(--teal-700)'];
@@ -574,7 +572,6 @@ function detailPanel() {
   const k    = z.kalkulace || {};
   const p    = PRIO[z.priorita];
   const koop = z.koopDetail || [];
-  const limit = S.nastaveni.dnyBezOdpovedi || 5;
   const rezerva = z.rezerva;
   const upravena = z.cenaPuvodni !== null || z.mnozstviZmeneno;
 
@@ -639,18 +636,6 @@ function detailPanel() {
         z.modelyChybi ? 'Modely chybí — nahrávání z kalkulátoru se nepovedlo, vyžádej soubory.'
         : 'E-mail se zákazníkovi nedoručil — ověř adresu, odpověď nepřijde.'),
 
-      z.cekaDnu >= limit && !z.modelyChybi && !z.nedorucitelny && h('div', {
-          class: 'varovani',
-          style: 'display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3)' },
-        h('span', { style: 'flex:1;min-width:220px' },
-          'Čeká na odpověď zákazníka ' + dny(z.cekaDnu) + ' — pošli výzvu, nebo kartu odlož. '
-          + 'Když nabídku schválí na stavové stránce, karta se do Schváleno posune sama.'),
-        muzeMenit() && z.stav !== 'odlozeno' && h('button', { class: 'btn btn-secondary', style: 'padding:3px 10px',
-          onclick: async () => {
-            if (!confirm('Přesunout zakázku do Odloženo / Zrušeno?')) return;
-            await presun(z.cislo, 'odlozeno');
-          } }, 'Odložit zakázku')),
-
       /* 01 — Zákazník */
       sekce('01 — Zákazník'),
       h('div', { style: 'font-size:16px;margin-bottom:var(--space-4)' },
@@ -712,7 +697,7 @@ function detailPanel() {
 
       h('div', { style: 'font-size:14px;color:var(--muted);max-width:66ch;margin-bottom:var(--space-3)' }, cenaPozn),
 
-      upravena && z.stav !== 'nova' && h('div', {
+      upravena && z.stav !== 'prijato' && h('div', {
           style: 'background:var(--red-100);color:var(--red);padding:var(--space-3);margin-bottom:var(--space-6);display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3)' },
         h('span', { style: 'font-size:15px;max-width:52ch' },
           'Cena zakázky se změnila po odeslání nabídky'
@@ -1369,7 +1354,6 @@ function obrazovkaNastaveni() {
       h('div', { style: 'display:flex;flex-direction:column;gap:var(--space-3);max-width:360px' },
         pole('Vysoká priorita, pokud je rezerva pod (h)', 'prahVysoka'),
         pole('Normální priorita, pokud je rezerva pod (h)', 'prahNormalni'),
-        pole('Upozornit na neodpovězenou nabídku po (dnech)', 'dnyBezOdpovedi'),
         h('div', { style: 'font-size:13px;color:var(--muted)' },
           'Rezerva = hodiny do termínu − (tisk + schnutí + manipulace + přeprava u externích). Hodnoty přicházejí z kalkulátoru.'),
         pole('Práh naplnění dávky (0–1, kdy se standardní zakázky automaticky spustí do tisku)', 'davkaPraH'),

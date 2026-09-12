@@ -51,6 +51,9 @@ function schemaAktualizuj(): void {
   sloupecZajisti('polozky', 'hodiny_tisku', 'REAL NOT NULL DEFAULT 0');
   sloupecZajisti('polozky', 'hodiny_schnuti', 'REAL NOT NULL DEFAULT 0');
   sloupecZajisti('polozky', 'hodiny_manipulace', 'REAL NOT NULL DEFAULT 0');
+  // dokud je 1, sloupec karty se řídí automaticky stavem navázaných tiskových úloh;
+  // ruční přesun karty (akce presun) to vypne, ať se karta nevrátí sama zpátky.
+  sloupecZajisti('zakazky', 'stav_auto', 'INTEGER NOT NULL DEFAULT 1');
 }
 
 /** Idempotentně přidá sloupec do tabulky, pokud v ní ještě není. */

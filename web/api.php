@@ -78,7 +78,6 @@ try {
         'nastaveni' => [
           'prahVysoka'     => (float)nastaveni('prahVysoka', '24'),
           'prahNormalni'   => (float)nastaveni('prahNormalni', '72'),
-          'dnyBezOdpovedi' => (int)nastaveni('dnyBezOdpovedi', '5'),
         ],
         'nezarazenoPocet' => (int)db()->query('SELECT COUNT(*) FROM nezarazeno')->fetchColumn(),
         'cas' => ted(),
@@ -105,7 +104,8 @@ try {
       $novy = (string)($v['stav'] ?? '');
       if ($novy === '' || $novy === $z['stav']) odesliJson(['ok' => true]);
       zmen($z, function (array $z) use ($novy) {
-        db()->prepare('UPDATE zakazky SET stav = ? WHERE id = ?')->execute([$novy, (int)$z['id']]);
+        // ruční přesun vypíná automatické sledování podle stavu výroby (viz vyroba.php)
+        db()->prepare('UPDATE zakazky SET stav = ?, stav_auto = 0 WHERE id = ?')->execute([$novy, (int)$z['id']]);
       }, 'Přesunuto do ' . nazevSloupce($novy) . ' — ' . mojeJmeno());
       odesliJson(['ok' => true]);
     }
@@ -352,7 +352,7 @@ try {
         'INSERT INTO zakazky (cislo, stav, termin, firma_id, zak_jmeno, zak_firma, zak_email, zak_telefon, zak_ico,
                               poznamka_zak, konfigurace, kalkulace, hodiny_manipulace, modely_chybi, zdroj, token,
                               vytvoreno, zmeneno)
-         VALUES (?,"nova",?,?,?,?,?,?,?,?,?,?,?,1,"rucne",?,?,?)')
+         VALUES (?,"prijato",?,?,?,?,?,?,?,?,?,?,?,1,"rucne",?,?,?)')
         ->execute([$cislo, (string)($v['termin'] ?? date('Y-m-d', strtotime('+14 days'))),
                    firmaZajisti($zak), $zak['jmeno'], $zak['firma'], $zak['email'], $zak['telefon'], $zak['ico'],
                    trim((string)($v['poznamka'] ?? '')),
@@ -418,7 +418,7 @@ try {
         db()->prepare(
           'INSERT INTO zakazky (cislo, stav, termin, firma_id, zak_jmeno, zak_email, poznamka_zak,
                                 konfigurace, kalkulace, modely_chybi, zdroj, token, vytvoreno, zmeneno)
-           VALUES (?,"nova",?,?,?,?,?,"{}","{}",1,"email",?,?,?)')
+           VALUES (?,"prijato",?,?,?,?,?,"{}","{}",1,"email",?,?,?)')
           ->execute([$cislo, date('Y-m-d', strtotime('+14 days')), firmaZajisti($zak),
                      $zak['jmeno'], $zak['email'], mb_substr((string)$m['telo'], 0, 2000),
                      nahodnyToken(24), ted(), ted()]);
@@ -515,7 +515,6 @@ try {
         'prahy'   => [
           'prahVysoka'     => (float)nastaveni('prahVysoka', '24'),
           'prahNormalni'   => (float)nastaveni('prahNormalni', '72'),
-          'dnyBezOdpovedi' => (int)nastaveni('dnyBezOdpovedi', '5'),
           'davkaPraH'      => (float)nastaveni('davkaPraH', '0.8'),
         ],
         'infoMaily'    => nastaveni('infoMaily', '0') === '1',
@@ -536,7 +535,7 @@ try {
 
     case 'nastaveni-uloz': {
       vyzadujAdmina();
-      foreach (['prahVysoka','prahNormalni','dnyBezOdpovedi','davkaPraH'] as $k) {
+      foreach (['prahVysoka','prahNormalni','davkaPraH'] as $k) {
         if (array_key_exists($k, $v)) nastavenoUloz($k, (string)$v[$k]);
       }
       if (array_key_exists('infoMaily', $v))    nastavenoUloz('infoMaily', $v['infoMaily'] ? '1' : '0');

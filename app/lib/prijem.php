@@ -69,7 +69,7 @@ function prijmiPoptavku(array $d, array $soubory = []): array {
                           poznamka_zak, konfigurace, kalkulace, tiskarna, jobs,
                           hodiny_tisku, hodiny_schnuti, hodiny_manipulace,
                           modely_chybi, zdroj, token, vytvoreno, zmeneno)
-     VALUES (?,"nova",?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+     VALUES (?,"prijato",?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     ->execute([
       $cislo, substr($termin, 0, 10), firmaZajisti($zak),
       $zak['jmeno'], $zak['firma'], $zak['email'], $zak['telefon'], $zak['ico'],
