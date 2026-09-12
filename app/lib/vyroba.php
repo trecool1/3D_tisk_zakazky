@@ -163,9 +163,11 @@ function synchronizujStavZakazek(array $zakazkaIds): void {
     $q = db()->prepare('SELECT id, stav FROM zakazky WHERE id = ? AND stav_auto = 1');
     $q->execute([(int)$zid]);
     $z = $q->fetch();
-    if (!$z) continue;
+    // hotovo/odloženo je vždy konečná — i kdyby zbyl stav_auto=1 z doby před touto
+    // funkcí, karta se z uzavřeného stavu nikdy sama nevrací zpátky do výroby
+    if (!$z || in_array($z['stav'], UZAVRENO, true)) continue;
     $novy = stavZakazkyPodleUloh((int)$zid);
-    if ($novy === null || $novy === $z['stav']) continue;
+    if ($novy === null || $novy === $z['stav'] || in_array($novy, UZAVRENO, true)) continue;
     db()->prepare('UPDATE zakazky SET stav = ?, zmeneno = ? WHERE id = ?')->execute([$novy, ted(), (int)$zid]);
     systemovyZaznam((int)$zid, 'Automaticky přesunuto do ' . nazevSloupce($novy) . ' (podle stavu výroby)');
   }
