@@ -1080,27 +1080,35 @@ function pozadavekRadek(x) {
 
   const hrefZip = 'soubory-zip.php?' + x.zakazky.map(z => 'p[]=' + z.polozkaId).join('&');
 
-  return h('div', { style: 'display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2)' },
-    h('span', { style: 'min-width:280px' },
-      h('strong', {}, x.nazev), ' · ' + x.material + ' · ' + x.tiskarna + ' — ' + zakazek(x.zakazek)),
-    h('span', { style: 'color:var(--muted-2)' }, 'zbývá ' + x.zbyva + ' ks (~' + x.odhadUloh + ' úloh)'),
-    h('label', { style: 'display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted-2)' },
-      'tisknout',
-      h('input', { class: 'input', type: 'number', min: '1', max: String(x.zbyva), value: tisknout,
-        style: 'width:70px;padding:4px 6px',
-        onchange: e => { S.pozTisk[klic] = Math.max(1, Math.min(x.zbyva, +e.target.value || 1)); vykresli(); } }),
-      'ks'),
-    stroje.length > 1
-      ? h('select', { class: 'input', style: 'width:auto;padding:4px 6px',
-          onchange: e => { S.pozStroj[klic] = +e.target.value; } },
-          stroje.map(s => h('option', { value: s.id, selected: s.id === S.pozStroj[klic] }, s.oznaceni)))
-      : h('span', { style: 'color:var(--muted-2);font-size:13px' }, stroje[0] ? stroje[0].oznaceni : '— chybí aktivní stroj —'),
-    h('a', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px', href: hrefZip, target: '_blank' },
-      'Stáhnout modely'),
-    h('button', { class: 'btn btn-secondary', style: 'padding:2px 10px;font-size:12px',
-      disabled: !S.pozStroj[klic],
-      onclick: () => vytisknout(x, klic, tisknout) },
-      'Vytisknout'));
+  return h('div', { style: 'display:flex;flex-direction:column;gap:2px' },
+    h('div', { style: 'display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2)' },
+      h('span', { style: 'min-width:280px' },
+        h('strong', {}, x.nazev), ' · ' + x.material + ' · ' + x.tiskarna + ' — ' + zakazek(x.zakazek)),
+      h('span', { style: 'color:var(--muted-2)' }, 'zbývá ' + x.zbyva + ' ks (~' + x.odhadUloh + ' úloh)'),
+      h('label', { style: 'display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted-2)' },
+        'tisknout',
+        h('input', { class: 'input', type: 'number', min: '1', max: String(x.zbyva), value: tisknout,
+          style: 'width:70px;padding:4px 6px',
+          onchange: e => { S.pozTisk[klic] = Math.max(1, Math.min(x.zbyva, +e.target.value || 1)); vykresli(); } }),
+        'ks'),
+      stroje.length > 1
+        ? h('select', { class: 'input', style: 'width:auto;padding:4px 6px',
+            onchange: e => { S.pozStroj[klic] = +e.target.value; } },
+            stroje.map(s => h('option', { value: s.id, selected: s.id === S.pozStroj[klic] }, s.oznaceni)))
+        : h('span', { style: 'color:var(--muted-2);font-size:13px' }, stroje[0] ? stroje[0].oznaceni : '— chybí aktivní stroj —'),
+      h('a', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px', href: hrefZip, target: '_blank' },
+        'Stáhnout modely'),
+      h('button', { class: 'btn btn-secondary', style: 'padding:2px 10px;font-size:12px',
+        disabled: !S.pozStroj[klic],
+        onclick: () => vytisknout(x, klic, tisknout) },
+        'Vytisknout')),
+    h('div', { style: 'font-size:12px;color:var(--muted);padding-left:2px' },
+      'zakázky: ', x.zakazky.map((z, i) => [
+        i > 0 && ', ',
+        h('a', { href: '#', style: 'color:var(--muted);text-decoration:underline',
+          onclick: e => { e.preventDefault(); S.view = 'board'; vykresli(); otevri(z.cislo); } },
+          z.cislo + ' (' + z.zbyva + ' ks)'),
+      ])));
 }
 
 async function vytisknout(x, klic, pocet) {
