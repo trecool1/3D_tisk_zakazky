@@ -218,7 +218,7 @@ function obrazovkaPrihlaseni() {
       const v = await api('login', { kdo: $('#loginKdo').value, heslo: $('#loginHeslo').value });
       S.user = v.uzivatel;
       S.csrf = v.csrf;
-      S.view = v.uzivatel.role === 'cteni' ? 'list' : 'board';
+      S.view = v.uzivatel.role === 'cteni' ? 'list' : 'today';
       S.loginChyba = '';
       await obnov();
     } catch (e) { S.loginChyba = e.message; vykresli(); }
@@ -268,7 +268,7 @@ function hlavicka() {
   const poTerminu    = S.zakazky.filter(z => !UZAVRENO.includes(z.stav) && z.dnuDoTerminu < 0).length;
 
   const pohledy = [
-    ['board', 'Tabule'], ['planovani', 'Plánování'], ['tiskarny', 'Tiskárny'], ['list', 'Seznam'], ['customers', 'Zákazníci'],
+    ['today', 'Dnes'], ['board', 'Tabule'], ['planovani', 'Plánování'], ['tiskarny', 'Tiskárny'], ['list', 'Seznam'], ['customers', 'Zákazníci'],
     ['mail', 'Pošta'], ['inbox', 'Nezařazeno'], ['settings', 'Nastavení'], ['public', 'Náhled pro zákazníka'],
   ].filter(([k]) => jeAdmin() || (k !== 'settings'
     && (muzeMenit() || (k !== 'inbox' && k !== 'mail' && k !== 'planovani' && k !== 'tiskarny'))));
@@ -328,6 +328,59 @@ async function prepniPohled(k) {
     if (k === 'public' && !S.pubCislo && S.zakazky[0]) S.pubCislo = S.zakazky[0].cislo;
   } catch (e) { hlas(e); }
   vykresli();
+}
+
+/* ---------- dnešní práce ---------- */
+
+function pracovniRadek(z) {
+  const poTerminu = !UZAVRENO.includes(z.stav) && z.dnuDoTerminu < 0;
+  const termin = UZAVRENO.includes(z.stav) ? 'uzavřeno'
+    : poTerminu ? 'po termínu ' + dny(-z.dnuDoTerminu)
+    : z.dnuDoTerminu === 0 ? 'dnes' : 'za ' + dny(z.dnuDoTerminu);
+  const barva = poTerminu ? 'var(--red)' : (z.dnuDoTerminu <= 2 ? 'var(--red-mid)' : 'var(--teal)');
+  return h('article', { class: 'card', style: 'cursor:pointer;border-left-color:' + barva + ';padding:12px',
+      onclick: () => otevri(z.cislo), tabindex: '0',
+      onkeydown: e => { if (e.key === 'Enter') otevri(z.cislo); } },
+    h('div', { style: 'display:flex;gap:8px;align-items:baseline' },
+      h('span', { class: 'cislo' }, z.cislo),
+      z.neprectene && h('span', { class: 'tecka', title: 'Nepřečtená zpráva' }),
+      h('span', { style: 'margin-left:auto;color:' + barva + ';font-weight:600;font-size:13px;white-space:nowrap' }, termin)),
+    h('div', { class: 'zakaznik', style: 'font-size:18px;margin-top:3px' }, z.zakaznik),
+    h('div', { style: 'display:flex;justify-content:space-between;gap:8px;color:var(--muted-2);font-size:14px;margin-top:4px' },
+      h('span', {}, [z.tech, z.material].filter(Boolean).join(' · ') || nazevSloupce(z.stav)),
+      h('span', { style: 'white-space:nowrap' }, kc(z.celkem))));
+}
+
+function sekceDnes(nadpis, popis, zakazky, prazdno) {
+  return h('section', { style: 'min-width:0;background:var(--panel);border-left:3px solid var(--teal);padding:var(--space-4)' },
+    h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-2);margin-bottom:4px' },
+      h('h3', { style: 'margin:0' }, nadpis),
+      h('span', { style: 'font-size:13px;color:var(--muted)' }, karty(zakazky.length))),
+    h('p', { style: 'margin:0 0 var(--space-3);font-size:14px;color:var(--muted-2)' }, popis),
+    zakazky.length ? zakazky.slice(0, 5).map(pracovniRadek)
+      : h('div', { style: 'background:#fff;border:1px solid var(--line);padding:var(--space-3);color:var(--muted)' }, prazdno));
+}
+
+function obrazovkaDnes() {
+  const aktivni = S.zakazky.filter(z => !UZAVRENO.includes(z.stav));
+  const horici = aktivni.filter(z => z.dnuDoTerminu <= 0).sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
+  const cekaji = aktivni.filter(z => z.neprectene || z.schvalilZakaznik || z.modelyChybi)
+    .sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
+  const vyroba = aktivni.filter(z => ['fronta', 'tiskne', 'postprocess', 'expedice'].includes(z.stav))
+    .sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
+  const dnes = aktivni.filter(z => z.dnuDoTerminu === 0).length;
+
+  return h('main', { style: 'padding:var(--space-5);max-width:1500px;width:100%;margin:0 auto' },
+    h('div', { style: 'display:flex;flex-wrap:wrap;gap:var(--space-3);justify-content:space-between;align-items:flex-end;margin-bottom:var(--space-5)' },
+      h('div', {}, h('div', { class: 'kicker' }, 'Pracovní přehled'), h('h2', { style: 'margin:8px 0 4px' }, 'Dnes v dílně'),
+        h('p', { style: 'margin:0;color:var(--muted-2)' }, dnes ? 'Dnes mají termín ' + zakazek(dnes) + '.' : 'Přehled toho, co potřebuje pozornost jako první.')),
+      h('div', { style: 'display:flex;flex-wrap:wrap;gap:var(--space-2)' },
+        muzeMenit() && h('button', { class: 'btn btn-primary', onclick: () => prepniPohled('planovani') }, 'Plánovat výrobu'),
+        h('button', { class: 'btn btn-secondary', onclick: () => prepniPohled('board') }, 'Otevřít tabuli'))),
+    h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4);align-items:start' },
+      sekceDnes('Hoří', 'Zakázky s termínem dnes nebo po termínu.', horici, 'Nic není po termínu ani na dnešek.'),
+      sekceDnes('Čeká na reakci', 'Nepřečtená odpověď, schválení nebo chybějící model.', cekaji, 'Žádný blokátor nečeká na vyřízení.'),
+      sekceDnes('Ve výrobě', 'Fronta tisku, tisk, dokončení a expedice.', vyroba, 'Ve výrobě teď není žádná otevřená zakázka.')));
 }
 
 /* ---------- tabule ---------- */
@@ -2055,7 +2108,7 @@ function vykresli() {
     obsah = obrazovkaPrihlaseni();
   } else {
     const podle = {
-      board: obrazovkaTabule, list: obrazovkaSeznam, planovani: obrazovkaPlanovani, tiskarny: obrazovkaTiskarny,
+      today: obrazovkaDnes, board: obrazovkaTabule, list: obrazovkaSeznam, planovani: obrazovkaPlanovani, tiskarny: obrazovkaTiskarny,
       customers: obrazovkaZakaznici,
       mail: obrazovkaPosta, inbox: obrazovkaNezarazeno, settings: obrazovkaNastaveni,
       public: obrazovkaNahled,
@@ -2064,7 +2117,7 @@ function vykresli() {
     let view = S.view;
     if ((view === 'settings' && !jeAdmin())
         || ((view === 'inbox' || view === 'mail' || view === 'planovani' || view === 'tiskarny') && !muzeMenit())) {
-      view = muzeMenit() ? 'board' : 'list';
+      view = muzeMenit() ? 'today' : 'list';
       S.view = view;
     }
     // na tabuli držíme výšku okna, ať se karty rolují uvnitř sloupce (ne celá stránka)
@@ -2126,7 +2179,10 @@ document.addEventListener('keydown', e => {
     const v = await api('me');
     S.user = v.uzivatel;
     S.csrf = v.csrf || null;
-    if (S.user) { await nactiStav(); try { S.sablonyCache = (await api('nastaveni')).sablony; } catch {} }
+    if (S.user) {
+      S.view = S.user.role === 'cteni' ? 'list' : 'today';
+      await nactiStav(); try { S.sablonyCache = (await api('nastaveni')).sablony; } catch {}
+    }
     else {
       // seznam uživatelů pro přihlašovací obrazovku
       try { S.uzivatele = (await api('uzivatele-login')).uzivatele; } catch { S.uzivatele = []; }
