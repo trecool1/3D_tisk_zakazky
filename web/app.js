@@ -96,7 +96,7 @@ const S = {
   firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
   nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], dragUloha: null, pubCislo: null, kopirovano: false,
   vyrobaStrojId: null, vyrobaObrazovka: 'prehled', planPool: [], planJobs: [], dragItem: null, planSeq: 0,
-  planHledani: '', planFTech: '',
+  planHledani: '', planFTech: '', planZakazka: null,
   chyba: '', nacitam: false, potvrzeni: null,
 };
 
@@ -329,8 +329,14 @@ async function prepniPohled(k) {
   vykresli();
 }
 
-async function otevriVyrobu(obrazovka) {
+async function otevriVyrobu(obrazovka, cisloZakazky = null) {
   S.vyrobaObrazovka = obrazovka;
+  if (cisloZakazky) {
+    // Z detailu vede plánování rovnou na konkrétní zakázku — nejen do obecné fronty.
+    S.planZakazka = cisloZakazky;
+    S.planHledani = cisloZakazky;
+    S.planFTech = '';
+  }
   await prepniPohled('production');
   if (obrazovka === 'planovani' && S.planJobs.length === 0) {
     try { await nactiPlanovani(); } catch (e) { hlas(e); }
@@ -775,7 +781,7 @@ function detailPanel() {
       h('div', { style: 'display:flex;align-items:baseline;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-1) 0 var(--space-4)' },
         h('h2', { style: 'margin:0' }, z.zakaznik),
         muzeMenit() && h('button', { class: 'btn btn-secondary', style: 'padding:4px 9px',
-          onclick: async () => { S.open = null; S.detail = null; await otevriVyrobu('planovani'); } }, 'Plánovat výrobu'),
+          onclick: async () => { S.open = null; S.detail = null; await otevriVyrobu('planovani', z.cislo); } }, 'Plánovat výrobu'),
         muzeMenit() && h('div', { style: 'display:inline-flex;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--line)',
             title: 'Sledování výroby: „Automat" znamená, že sloupec na tabuli hlídá appka podle stavu tiskových úloh. „Ruční" znamená, že se sloupec sám nemění (typicky po ručním přetažení karty).' },
           h('button', { class: 'prepinac' + (z.stavAuto ? ' zap teal' : ''), style: 'border:0;border-radius:0',
@@ -1326,8 +1332,6 @@ function obrazovkaPlanovani() {
 }
 
 function obrazovkaTiskarny() {
-  const stroje = S.vyroba || [];
-  if (!stroje.length) return h('div', { class: 'hlaska' }, 'Žádné aktivní stroje. Přidej je v Nastavení.');
   return prehledTiskarenScreen();
 }
 
@@ -1335,6 +1339,18 @@ function obrazovkaTiskarny() {
 
 function prehledTiskarenScreen() {
   const stroje = S.vyroba || [];
+  const tiskarny = (S.tiskarny || []).filter(t => t.aktivni);
+  if (!stroje.length) {
+    return h('div', { style: 'padding:var(--space-4)' },
+      h('h3', { class: 'kicker' }, 'Tiskárny'),
+      tiskarny.length
+        ? h('div', { style: 'display:flex;flex-wrap:wrap;gap:var(--space-2);margin-bottom:var(--space-4)' },
+            tiskarny.map(t => h('div', { style: 'background:var(--panel);border-left:3px solid var(--teal);padding:var(--space-3);min-width:180px' },
+              h('div', { style: 'font-weight:600' }, t.nazev),
+              h('div', { style: 'font-size:13px;color:var(--muted-2)' }, t.tech + (t.inHouse ? ' · vlastní výroba' : ' · kooperace')))))
+        : h('div', { class: 'hlaska' }, 'V ceníku zatím nejsou žádné aktivní tiskárny.'),
+      h('div', { style: 'font-size:15px;color:var(--muted-2)' }, 'Pro zobrazení fronty a plánování přidej u tiskárny fyzický stroj v Nastavení → Tiskárny a stroje.'));
+  }
   if (!S.vyrobaStrojId || !stroje.some(s => s.strojId === S.vyrobaStrojId)) S.vyrobaStrojId = stroje[0].strojId;
   const sel = stroje.find(s => s.strojId === S.vyrobaStrojId);
 
@@ -1566,6 +1582,11 @@ function planovaniScreen() {
   if (S.planRazeni && RAZENI_ZAKAZKY[S.planRazeni]) pool.sort((a, b) => RAZENI_ZAKAZKY[S.planRazeni].cmp(a, b) * S.planRazeniSmer);
 
   return h('div', { style: 'padding:var(--space-4)' },
+    S.planZakazka && h('div', { class: 'pruh-filtru', style: 'margin-bottom:var(--space-4)' },
+      h('span', {}, 'Plánování pro zakázku ' + S.planZakazka + '.'),
+      h('button', { class: 'btn btn-secondary', style: 'padding:3px 10px', onclick: () => {
+        S.planZakazka = null; S.planHledani = ''; vykresli();
+      } }, 'Zobrazit celou frontu')),
     h('div', { style: 'display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:var(--space-6)' },
       h('div', { style: 'min-width:0' },
         h('h3', { class: 'kicker' }, 'Nepřiřazené díly'),
@@ -1607,7 +1628,8 @@ function planovaniScreen() {
 }
 
 function planPoolSkupina(g) {
-  return h('div', { style: 'margin-bottom:var(--space-5);padding:var(--space-3);background:var(--panel);border-left:3px solid var(--teal)' },
+  const vybrana = g.cislo === S.planZakazka;
+  return h('div', { style: 'margin-bottom:var(--space-5);padding:var(--space-3);background:' + (vybrana ? 'var(--teal-100)' : 'var(--panel)') + ';border-left:3px solid ' + (vybrana ? 'var(--teal-700)' : 'var(--teal)') },
     h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-2);padding-bottom:6px;flex-wrap:wrap' },
       h('span', {},
         h('span', { style: 'font-family:var(--font-heading);font-size:18px;font-weight:600' }, g.zakaznik || '—'),
