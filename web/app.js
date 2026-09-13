@@ -86,7 +86,7 @@ const RAZENI_ZAKAZKY = {
 /* ---------- stav ---------- */
 
 const S = {
-  user: null, csrf: null, view: 'board',
+  user: null, csrf: null, view: 'board', dnesRozbalene: {},
   zakazky: [], sloupce: [], uzivatele: [], nastaveni: {}, nezarazenoPocet: 0,
   open: null, detail: null, sel: null, drag: null, dragOver: null,
   hledani: '', fKdo: '', fTech: '', fPrio: '', fNeprectene: false, fPoTerminu: false, fExterni: false,
@@ -351,13 +351,19 @@ function pracovniRadek(z) {
       h('span', { style: 'white-space:nowrap' }, kc(z.celkem))));
 }
 
-function sekceDnes(nadpis, popis, zakazky, prazdno) {
+function sekceDnes(klic, nadpis, popis, zakazky, prazdno) {
+  const rozbaleno = !!S.dnesRozbalene[klic];
+  const viditelne = rozbaleno ? zakazky : zakazky.slice(0, 5);
   return h('section', { style: 'min-width:0;background:var(--panel);border-left:3px solid var(--teal);padding:var(--space-4)' },
     h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:var(--space-2);margin-bottom:4px' },
       h('h3', { style: 'margin:0' }, nadpis),
-      h('span', { style: 'font-size:13px;color:var(--muted)' }, karty(zakazky.length))),
+      h('span', { style: 'font-size:13px;color:var(--muted)' },
+        zakazky.length > 5 && !rozbaleno ? 'zobrazeno 5 z ' + zakazky.length : karty(zakazky.length))),
     h('p', { style: 'margin:0 0 var(--space-3);font-size:14px;color:var(--muted-2)' }, popis),
-    zakazky.length ? zakazky.slice(0, 5).map(pracovniRadek)
+    zakazky.length ? [viditelne.map(pracovniRadek),
+      zakazky.length > 5 && h('button', { class: 'btn btn-ghost', style: 'margin-top:var(--space-2);padding:4px 8px',
+        onclick: () => { S.dnesRozbalene[klic] = !rozbaleno; vykresli(); } },
+      rozbaleno ? 'Zobrazit jen prvních 5' : 'Zobrazit všech ' + zakazky.length)]
       : h('div', { style: 'background:#fff;border:1px solid var(--line);padding:var(--space-3);color:var(--muted)' }, prazdno));
 }
 
@@ -378,9 +384,9 @@ function obrazovkaDnes() {
         muzeMenit() && h('button', { class: 'btn btn-primary', onclick: () => prepniPohled('planovani') }, 'Plánovat výrobu'),
         h('button', { class: 'btn btn-secondary', onclick: () => prepniPohled('board') }, 'Otevřít tabuli'))),
     h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4);align-items:start' },
-      sekceDnes('Hoří', 'Zakázky s termínem dnes nebo po termínu.', horici, 'Nic není po termínu ani na dnešek.'),
-      sekceDnes('Čeká na reakci', 'Nepřečtená odpověď, schválení nebo chybějící model.', cekaji, 'Žádný blokátor nečeká na vyřízení.'),
-      sekceDnes('Ve výrobě', 'Fronta tisku, tisk, dokončení a expedice.', vyroba, 'Ve výrobě teď není žádná otevřená zakázka.')));
+      sekceDnes('hori', 'Hoří', 'Zakázky s termínem dnes nebo po termínu.', horici, 'Nic není po termínu ani na dnešek.'),
+      sekceDnes('ceka', 'Čeká na reakci', 'Nepřečtená odpověď, schválení nebo chybějící model.', cekaji, 'Žádný blokátor nečeká na vyřízení.'),
+      sekceDnes('vyroba', 'Ve výrobě', 'Fronta tisku, tisk, dokončení a expedice.', vyroba, 'Ve výrobě teď není žádná otevřená zakázka.')));
 }
 
 /* ---------- tabule ---------- */
