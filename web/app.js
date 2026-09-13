@@ -95,7 +95,7 @@ const S = {
   smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false,
   firmy: [], firmaKlic: null, hledaniFirmy: '', posta: [], postaFiltr: 'vse', nezarazeno: null,
   nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], dragUloha: null, pubCislo: null, kopirovano: false,
-  vyrobaStrojId: null, planPool: [], planJobs: [], dragItem: null, planSeq: 0,
+  vyrobaStrojId: null, vyrobaObrazovka: 'prehled', planPool: [], planJobs: [], dragItem: null, planSeq: 0,
   planHledani: '', planFTech: '',
   chyba: '', nacitam: false, potvrzeni: null,
 };
@@ -268,10 +268,10 @@ function hlavicka() {
   const poTerminu    = S.zakazky.filter(z => !UZAVRENO.includes(z.stav) && z.dnuDoTerminu < 0).length;
 
   const pohledy = [
-    ['today', 'Dnes'], ['board', 'Tabule'], ['planovani', 'Plánování'], ['tiskarny', 'Tiskárny'], ['list', 'Seznam'], ['customers', 'Zákazníci'],
+    ['today', 'Dnes'], ['board', 'Tabule'], ['production', 'Výroba'], ['list', 'Seznam'], ['customers', 'Zákazníci'],
     ['mail', 'Pošta'], ['inbox', 'Nezařazeno'], ['settings', 'Nastavení'], ['public', 'Náhled pro zákazníka'],
   ].filter(([k]) => jeAdmin() || (k !== 'settings'
-    && (muzeMenit() || (k !== 'inbox' && k !== 'mail' && k !== 'planovani' && k !== 'tiskarny'))));
+    && (muzeMenit() || (k !== 'inbox' && k !== 'mail' && k !== 'production'))));
 
   // Počty jsou při nule zšedlé a nekliknutelné — jinak by klik vyprázdnil tabuli.
   const pocitadlo = (pocet, text, aktivni, klik) => h('button', {
@@ -312,14 +312,13 @@ async function prepniPohled(k) {
     if (k === 'customers') { S.firmy = (await api('firmy')).firmy; if (!S.firmaKlic && S.firmy[0]) S.firmaKlic = S.firmy[0].klic; }
     if (k === 'mail')      S.posta = (await api('posta&filtr=' + S.postaFiltr)).posta;
     if (k === 'inbox')     S.nezarazeno = await api('nezarazeno');
-    if (k === 'planovani' || k === 'tiskarny') {
+    if (k === 'production') {
       // znovunačtení fronty strojů je vždy bezpečné; nepřiřazené díly se taky vždy
       // dotáhnou znovu (jinak by po přesunu zakázky do "Ve frontě na tisk" jinde
       // zůstal starý, už jednou načtený pool) — jen rozpracovaný návrh (S.planJobs)
       // se nesahá, ať druhý klik na Plánování nesmaže rozpracovanou práci
       S.vyroba = (await api('vyroba')).stroje;
       const t = await api('tiskarny'); S.tiskarny = t.tiskarny; S.stroje = t.stroje;
-      if (k === 'planovani' && S.planJobs.length === 0) await nactiPlanovani();
     }
     if (k === 'settings')  {
       S.nastaveniData = await api('nastaveni');
@@ -327,6 +326,15 @@ async function prepniPohled(k) {
     }
     if (k === 'public' && !S.pubCislo && S.zakazky[0]) S.pubCislo = S.zakazky[0].cislo;
   } catch (e) { hlas(e); }
+  vykresli();
+}
+
+async function otevriVyrobu(obrazovka) {
+  S.vyrobaObrazovka = obrazovka;
+  await prepniPohled('production');
+  if (obrazovka === 'planovani' && S.planJobs.length === 0) {
+    try { await nactiPlanovani(); } catch (e) { hlas(e); }
+  }
   vykresli();
 }
 
@@ -381,7 +389,7 @@ function obrazovkaDnes() {
       h('div', {}, h('div', { class: 'kicker' }, 'Pracovní přehled'), h('h2', { style: 'margin:8px 0 4px' }, 'Dnes v dílně'),
         h('p', { style: 'margin:0;color:var(--muted-2)' }, dnes ? 'Dnes mají termín ' + zakazek(dnes) + '.' : 'Přehled toho, co potřebuje pozornost jako první.')),
       h('div', { style: 'display:flex;flex-wrap:wrap;gap:var(--space-2)' },
-        muzeMenit() && h('button', { class: 'btn btn-primary', onclick: () => prepniPohled('planovani') }, 'Plánovat výrobu'),
+        muzeMenit() && h('button', { class: 'btn btn-primary', onclick: () => otevriVyrobu('planovani') }, 'Plánovat výrobu'),
         h('button', { class: 'btn btn-secondary', onclick: () => prepniPohled('board') }, 'Otevřít tabuli'))),
     h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4);align-items:start' },
       sekceDnes('hori', 'Hoří', 'Zakázky s termínem dnes nebo po termínu.', horici, 'Nic není po termínu ani na dnešek.'),
@@ -766,6 +774,8 @@ function detailPanel() {
         h('button', { class: 'btn btn-ghost', style: 'margin-left:auto', onclick: zavri }, 'Zavřít ✕')),
       h('div', { style: 'display:flex;align-items:baseline;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-1) 0 var(--space-4)' },
         h('h2', { style: 'margin:0' }, z.zakaznik),
+        muzeMenit() && h('button', { class: 'btn btn-secondary', style: 'padding:4px 9px',
+          onclick: async () => { S.open = null; S.detail = null; await otevriVyrobu('planovani'); } }, 'Plánovat výrobu'),
         muzeMenit() && h('div', { style: 'display:inline-flex;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--line)',
             title: 'Sledování výroby: „Automat" znamená, že sloupec na tabuli hlídá appka podle stavu tiskových úloh. „Ruční" znamená, že se sloupec sám nemění (typicky po ručním přetažení karty).' },
           h('button', { class: 'prepinac' + (z.stavAuto ? ' zap teal' : ''), style: 'border:0;border-radius:0',
@@ -1295,7 +1305,19 @@ function obrazovkaSeznam() {
           h('td', {}, jmenoKlice(z.prirazeno) || '—')))))));
 }
 
-/* ---------- Výroba: Plánování + Tiskárny (samostatné záložky v horní navigaci) ---------- */
+/* ---------- Výroba: přehled a plánování pod jednou položkou navigace ---------- */
+
+function obrazovkaVyroba() {
+  const plan = S.vyrobaObrazovka === 'planovani';
+  return h('div', { class: 'obrazovka' },
+    h('div', { style: 'display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-4)' },
+      h('div', {}, h('div', { class: 'kicker' }, 'Výroba'),
+        h('h3', { style: 'margin:8px 0 0' }, plan ? 'Plánování tiskových úloh' : 'Přehled tiskáren')),
+      h('div', { style: 'display:flex;gap:var(--space-2)' },
+        h('button', { class: 'btn ' + (!plan ? 'btn-primary' : 'btn-secondary'), onclick: () => otevriVyrobu('prehled') }, 'Přehled'),
+        h('button', { class: 'btn ' + (plan ? 'btn-primary' : 'btn-secondary'), onclick: () => otevriVyrobu('planovani') }, 'Plánování'))),
+    plan ? obrazovkaPlanovani() : obrazovkaTiskarny());
+}
 
 function obrazovkaPlanovani() {
   const stroje = S.vyroba || [];
@@ -1518,7 +1540,8 @@ async function planPotvrdit() {
   }
   S.vyroba = (await api('vyroba')).stroje;
   await nactiPlanovani();
-  S.view = 'tiskarny';
+  S.view = 'production';
+  S.vyrobaObrazovka = 'prehled';
   vykresli();
 }
 
@@ -2114,7 +2137,7 @@ function vykresli() {
     obsah = obrazovkaPrihlaseni();
   } else {
     const podle = {
-      today: obrazovkaDnes, board: obrazovkaTabule, list: obrazovkaSeznam, planovani: obrazovkaPlanovani, tiskarny: obrazovkaTiskarny,
+      today: obrazovkaDnes, board: obrazovkaTabule, list: obrazovkaSeznam, production: obrazovkaVyroba,
       customers: obrazovkaZakaznici,
       mail: obrazovkaPosta, inbox: obrazovkaNezarazeno, settings: obrazovkaNastaveni,
       public: obrazovkaNahled,
@@ -2122,7 +2145,7 @@ function vykresli() {
     // pohled, na který uživatel nemá právo, se tiše sklopí na tabuli / seznam
     let view = S.view;
     if ((view === 'settings' && !jeAdmin())
-        || ((view === 'inbox' || view === 'mail' || view === 'planovani' || view === 'tiskarny') && !muzeMenit())) {
+        || ((view === 'inbox' || view === 'mail' || view === 'production') && !muzeMenit())) {
       view = muzeMenit() ? 'today' : 'list';
       S.view = view;
     }
