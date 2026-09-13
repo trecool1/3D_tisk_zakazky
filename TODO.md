@@ -6,8 +6,8 @@ Aktualizováno: 13. 9. 2026
 
 - [x] Projít na notebooku nové pohledy **Dnes** a **Výroba** — vypadají a fungují správně. Na tabletu ještě neověřeno (potřeba fyzické zařízení).
 - [x] Ověřit celý tok: otevřít zakázku → **Plánovat výrobu** → vytvořit úlohu → zahájit tisk → dokončit → expedice — projeto na testovací zakázce P-2026-0034 (přesunuto do Odloženo/Zrušeno po ověření), včetně automatického posunu sloupce (Přijato → Fronta → Tiskne se → Postprocess) a ručního přepnutí na Expedice.
-  - **Nalezený problém:** „Automatický návrh pro vše“ v plánování ignoruje filtr/hledání a navrhne úlohy pro úplně všechny nepřiřazené kusy ze všech zakázek najednou (ne jen pro otevřenou/filtrovanou zakázku) — snadno se tak omylem naplánuje celá fronta. Než se potvrdí, stojí za kontrolu, co přesně je navrženo.
-  - **Nalezený problém:** hláška „Nespárovaná tiskárna (chybí v registru): Bambu Lab“ — v datech je typ tiskárny neodpovídající žádnému záznamu v Nastavení (možná z importu z kalkulátoru, jiný zápis názvu). Stojí za dohledání zdroje.
+  - [x] **Opraveno:** „Automatický návrh pro vše“ ignoroval filtr/hledání a navrhl úlohy pro úplně všechny nepřiřazené kusy ze všech zakázek najednou — při aktivním hledání/filtru teď návrh (i tlačítko samo, popisek „pro vyfiltrované“) zahrne jen to, co je vidět. Ověřeno v produkci.
+  - **Zjištěno, neopraveno:** hláška „Nespárovaná tiskárna (chybí v registru): Bambu Lab“ — v datech je typ tiskárny „Bambu Lab“ (s mezerou), který neodpovídá žádnému registrovanému typu (Bambulab H2D/X1C). Je to nejspíš z importu z kalkulátoru s jiným zápisem názvu; nejde bezpečně domapovat automaticky (dvě možné cílové tiskárny), chce to dohledat zdroj v kalkulátoru nebo v datech zakázky.
 - [x] U každé používané tiskárny zkontrolovat aktivní fyzický stroj — Bambulab H2D, Bambulab X1C, Sinterit Lisa PRO (2×) a Sinterit Lisa X mají každá aktivní stroj; Italie MJF a Italie RESIN jsou záměrně bez stroje (externí kooperace). V pořádku.
 - [ ] Ověřit, že po obnovení stránky fungují všechny změnové akce (nově používají ochranný CSRF token).
 
