@@ -66,11 +66,16 @@ const PRIO = {
   nizka:    { label: 'nízká',    bg: 'var(--line)',    fg: 'var(--muted)',   rank: 3 },
 };
 const UZAVRENO = ['hotovo', 'odlozeno'];
+// Každá technologie má vlastní odstín, ať jde na tabuli poznat na první pohled
+// (FDM je nejčastější, proto teplá amber; SLA/RESIN stejná rodina — fotopolymer;
+// SLS teal jako zbytek appky; MJF zelená; SLM tmavá — vždy externí kooperace).
 const TECH_BARVY = {
-  FDM:   'background:var(--line);color:var(--muted-2)',
+  FDM:   'background:#f6e3c5;color:#8a5a06',
+  SLA:   'background:#ece3fb;color:#5b3aa0',
+  RESIN: 'background:#ece3fb;color:#5b3aa0',
   SLS:   'background:var(--teal-100);color:var(--teal-700)',
-  MJF:   'background:var(--teal);color:#fff',
-  RESIN: 'background:var(--ink);color:#fff',
+  MJF:   'background:#dcf1e1;color:#1c7a3c',
+  SLM:   'background:var(--ink);color:#fff',
 };
 function techZnackaStyl(tech) { return TECH_BARVY[tech] || 'background:var(--panel);color:var(--muted-2)'; }
 
