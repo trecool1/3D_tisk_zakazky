@@ -77,7 +77,11 @@ const TECH_BARVY = {
   MJF:   'background:#dcf1e1;color:#1c7a3c',
   SLM:   'background:var(--ink);color:#fff',
 };
-function techZnackaStyl(tech) { return TECH_BARVY[tech] || 'background:var(--panel);color:var(--muted-2)'; }
+// Data z kalkulátoru nemají sjednocené velikosti písmen (např. položky "Resin",
+// ale registr tiskáren "RESIN") — porovnávat bez ohledu na velikost písmen.
+function techZnackaStyl(tech) {
+  return TECH_BARVY[(tech || '').toUpperCase()] || 'background:var(--panel);color:var(--muted-2)';
+}
 
 // Sdílené řazení pro tabuli i plánování — obojí má cislo/zakaznik/dnuDoTerminu.
 // cmp je vždy ve vzestupném (asc) směru; smer (1/-1) se násobí zvlášť, ať
@@ -94,7 +98,7 @@ const S = {
   user: null, csrf: null, view: 'board', dnesRozbalene: {},
   zakazky: [], sloupce: [], uzivatele: [], nastaveni: {}, nezarazenoPocet: 0,
   open: null, detail: null, sel: null, drag: null, dragOver: null,
-  hledani: '', fKdo: '', fTech: '', fPrio: '', fNeprectene: false, fPoTerminu: false, fExterni: false,
+  hledani: '', fKdo: '', fTech: '', fPrio: '', fNeprectene: false, fPoTerminu: false, fExterni: false, rychlyFiltr: null,
   fStav: '', razeni: 'termin', boardRazeni: 'cislo', boardRazeniSmer: -1, planRazeni: '', planRazeniSmer: 1,
   rezim: 'odpoved', draft: '', prebitCena: '', prebitDuvod: '', histOpen: false,
   smazPriloha: null, dropAktivni: false, citaceZpravy: {}, histZakOpen: false,
@@ -263,6 +267,15 @@ const jmenoKlice = k => (S.uzivatele.find(u => u.klic === k) || {}).jmeno || '';
 function viditelneSloupce() { return S.sloupce.filter(s => !s.skryt); }
 function nazevSloupce(k) { const s = S.sloupce.find(x => x.klic === k); return s ? s.nazev : k; }
 
+// Stejné skupiny jako v přehledu „Dnes" — sdílené, ať „Zobrazit na tabuli"
+// z jedné skupiny ukáže přesně to, co bylo v jejím seznamu.
+const RYCHLE_FILTRY = {
+  hori:   z => !UZAVRENO.includes(z.stav) && z.dnuDoTerminu <= 0,
+  ceka:   z => !UZAVRENO.includes(z.stav) && (z.neprectene || z.schvalilZakaznik || z.modelyChybi),
+  vyroba: z => !UZAVRENO.includes(z.stav) && ['fronta', 'tiskne', 'postprocess', 'expedice'].includes(z.stav),
+};
+const RYCHLY_FILTR_POPIS = { hori: 'hoří', ceka: 'čeká na reakci', vyroba: 've výrobě' };
+
 function projde(z) {
   const q = S.hledani.trim().toLowerCase();
   if (q) {
@@ -276,6 +289,7 @@ function projde(z) {
   if (S.fNeprectene && !z.neprectene) return false;
   if (S.fPoTerminu && (z.dnuDoTerminu >= 0 || UZAVRENO.includes(z.stav))) return false;
   if (S.fExterni && !(z.koop && z.koop.length)) return false;
+  if (S.rychlyFiltr && !RYCHLE_FILTRY[S.rychlyFiltr](z)) return false;
   return true;
 }
 
@@ -291,7 +305,7 @@ function poradiKaret(list) {
 }
 
 function maFiltry() {
-  return !!(S.hledani || S.fKdo || S.fTech || S.fPrio || S.fNeprectene || S.fPoTerminu || S.fExterni);
+  return !!(S.hledani || S.fKdo || S.fTech || S.fPrio || S.fNeprectene || S.fPoTerminu || S.fExterni || S.rychlyFiltr);
 }
 
 /* ---------- přihlášení ---------- */
@@ -451,6 +465,13 @@ function pracovniRadek(z) {
       h('span', { style: 'white-space:nowrap' }, kc(z.celkem))));
 }
 
+// Otevře tabuli přefiltrovanou přesně na skupinu, ze které se kliklo — stejná
+// množina karet jako v seznamu, jen na tabuli (drag-and-drop, hromadné akce).
+function otevriNaTabuli(klic) {
+  S.rychlyFiltr = klic;
+  prepniPohled('board');
+}
+
 function sekceDnes(klic, nadpis, popis, zakazky, prazdno) {
   const rozbaleno = !!S.dnesRozbalene[klic];
   const viditelne = rozbaleno ? zakazky : zakazky.slice(0, 5);
@@ -460,7 +481,10 @@ function sekceDnes(klic, nadpis, popis, zakazky, prazdno) {
       h('span', { style: 'font-size:13px;color:var(--muted)' },
         zakazky.length > 5 && !rozbaleno ? 'zobrazeno 5 z ' + zakazky.length : karty(zakazky.length))),
     h('p', { style: 'margin:0 0 var(--space-3);font-size:14px;color:var(--muted-2)' }, popis),
-    zakazky.length ? [viditelne.map(pracovniRadek),
+    zakazky.length > 0 && h('button', { class: 'btn btn-secondary', style: 'padding:4px 10px;margin-bottom:var(--space-3)',
+      title: 'Zobrazit jen tuhle skupinu na tabuli — jde na ní přetahovat karty a dělat hromadné akce.',
+      onclick: () => otevriNaTabuli(klic) }, 'Zobrazit na tabuli'),
+    zakazky.length > 0 ? [viditelne.map(pracovniRadek),
       zakazky.length > 5 && h('button', { class: 'btn btn-ghost', style: 'margin-top:var(--space-2);padding:4px 8px',
         onclick: () => { S.dnesRozbalene[klic] = !rozbaleno; vykresli(); } },
       rozbaleno ? 'Zobrazit jen prvních 5' : 'Zobrazit všech ' + zakazky.length)]
@@ -469,11 +493,9 @@ function sekceDnes(klic, nadpis, popis, zakazky, prazdno) {
 
 function obrazovkaDnes() {
   const aktivni = S.zakazky.filter(z => !UZAVRENO.includes(z.stav));
-  const horici = aktivni.filter(z => z.dnuDoTerminu <= 0).sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
-  const cekaji = aktivni.filter(z => z.neprectene || z.schvalilZakaznik || z.modelyChybi)
-    .sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
-  const vyroba = aktivni.filter(z => ['fronta', 'tiskne', 'postprocess', 'expedice'].includes(z.stav))
-    .sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
+  const horici = aktivni.filter(RYCHLE_FILTRY.hori).sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
+  const cekaji = aktivni.filter(RYCHLE_FILTRY.ceka).sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
+  const vyroba = aktivni.filter(RYCHLE_FILTRY.vyroba).sort((a, b) => a.dnuDoTerminu - b.dnuDoTerminu);
   const dnes = aktivni.filter(z => z.dnuDoTerminu === 0).length;
 
   return h('main', { style: 'padding:var(--space-5);max-width:1500px;width:100%;margin:0 auto' },
@@ -505,6 +527,7 @@ function obrazovkaTabule() {
     if (S.fNeprectene) a.push('nepřečtená zpráva');
     if (S.fPoTerminu)  a.push('po termínu');
     if (S.fExterni)    a.push('externí kooperace');
+    if (S.rychlyFiltr) a.push(RYCHLY_FILTR_POPIS[S.rychlyFiltr]);
     return 'Filtry: ' + a.join(' + ') + ' · skryto ' + karty(skryto);
   };
 
@@ -547,7 +570,7 @@ function obrazovkaTabule() {
       h('span', { style: 'font-size:15px;color:var(--muted-2)' }, popisFiltru()),
       h('button', { class: 'btn btn-secondary', style: 'padding:3px 10px', onclick: () => {
         Object.assign(S, { hledani: '', fKdo: '', fTech: '', fPrio: '',
-          fNeprectene: false, fPoTerminu: false, fExterni: false });
+          fNeprectene: false, fPoTerminu: false, fExterni: false, rychlyFiltr: null });
         vykresli();
       } }, 'Zrušit filtry')),
 
