@@ -183,13 +183,15 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
   padding: var(--space-3) var(--space-4); }
 .varovani { background: var(--red-100); color: var(--red); padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md); font-size: 14px; margin-bottom: var(--space-6); }
-.potvrzeni { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 41;
+.dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 41;
   width: min(480px, 92vw); max-height: 84vh; overflow-y: auto; background: var(--bg);
   box-shadow: 0 8px 32px rgba(28,43,51,.24); padding: var(--space-6); }
-.potvrzeni h3 { margin: 0 0 var(--space-3); font-family: var(--font-heading); font-size: 20px;
-  text-transform: uppercase; color: var(--ink); }
-.potvrzeni p { margin: 0 0 var(--space-2); font-size: 14px; }
-.potvrzeni .varovani { margin-bottom: 0; }
+/* nadpis dialogu bere barvu i velikost ze společného pravidla h3 (teal, uppercase) —
+   ať vypadá stejně jako nadpisy „Výroby" a ostatních obrazovek */
+.dialog h3 { margin: 0 0 var(--space-3); }
+.dialog p { margin: 0 0 var(--space-2); font-size: 14px; }
+.dialog .varovani { margin-bottom: 0; }
+.dialog-tlacitka { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
 
 /* ---------- stránky ---------- */
 

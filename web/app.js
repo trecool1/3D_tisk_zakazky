@@ -128,7 +128,27 @@ function hlas(chyba) {
   if (S.chyba) setTimeout(() => { S.chyba = ''; vykresli(); }, 6000);
 }
 
-// Potvrzovací okno ve stylu appky místo nativního confirm() — vrací Promise<boolean>.
+// Jedno sdílené vyskakovací okno pro potvrzení, textový dotaz i krátký formulář —
+// stejná hlavička (kicker + nadpis), patička s tlačítky a zavírání (Escape, klik mimo,
+// křížek) pro všechny tři případy, ať appka nepůsobí na každém místě jinak.
+// Nahrazuje nativní prompt()/confirm(), které jsou na dotyku neohrabané a v někte-
+// rých prohlížečích (i automatizovaných) zamrazí stránku, dokud je uživatel ručně
+// nezavře.
+function dialogOkno({ kicker, nadpis, telo, tlacitka, zavri }) {
+  return [
+    h('div', { class: 'zakryt', onclick: zavri }),
+    h('div', { class: 'dialog', onkeydown: e => { if (e.key === 'Escape') { e.preventDefault(); zavri(); } } },
+      h('div', { style: 'display:flex;align-items:flex-start;gap:var(--space-2)' },
+        h('div', { style: 'flex:1;min-width:0' },
+          kicker && h('div', { class: 'kicker', style: 'margin-bottom:6px' }, kicker),
+          h('h3', {}, nadpis)),
+        h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px', onclick: zavri }, '✕')),
+      telo,
+      h('div', { class: 'dialog-tlacitka' }, tlacitka)),
+  ];
+}
+
+// Potvrzovací okno místo nativního confirm() — vrací Promise<boolean>.
 function potvrdit(nadpis, telo, textOk) {
   return new Promise(resolve => {
     S.potvrzeni = { nadpis, telo, textOk: textOk || 'Potvrdit', resolve };
@@ -139,24 +159,22 @@ function potvrdit(nadpis, telo, textOk) {
 function potvrzeniOkno() {
   const p = S.potvrzeni;
   if (!p) return null;
-  const zavri = ok => { S.potvrzeni = null; vykresli(); p.resolve(ok); };
-  return [
-    h('div', { class: 'zakryt', onclick: () => zavri(false) }),
-    h('div', { class: 'potvrzeni' },
-      h('h3', {}, p.nadpis),
-      p.telo,
-      h('div', { style: 'display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-4)' },
-        h('button', { class: 'btn btn-ghost', onclick: () => zavri(false) }, 'Zrušit'),
-        h('button', { class: 'btn btn-primary', onclick: () => zavri(true) }, p.textOk))),
-  ];
+  const zavri = ok => { S.potvrzeni = null; vykresli(); p.resolve(!!ok); };
+  return dialogOkno({
+    kicker: 'Potvrzení', nadpis: p.nadpis, telo: p.telo, zavri: () => zavri(false),
+    tlacitka: [
+      h('button', { class: 'btn btn-ghost', onclick: () => zavri(false) }, 'Zrušit'),
+      h('button', { class: 'btn btn-primary', onclick: () => zavri(true) }, p.textOk),
+    ],
+  });
 }
 
-// Textový dotaz ve stylu appky místo nativního prompt() — vrací Promise<string|null>.
-// Nativní prompt/confirm na dotyku působí neohrabaně a v některých prohlížečích
-// (i automatizovaných) blokuje celou stránku, dokud ho uživatel ručně nezavře.
-function zeptat(nadpis, hodnota, textOk) {
+// Textový dotaz místo nativního prompt() — vrací Promise<string|null> (null = zrušeno).
+// { nadpis, popisek, hodnota, textOk, typ } — popisek je štítek nad polem (jako
+// u ostatních formulářů appky), typ 'password' schová zadávané heslo.
+function zeptat(nadpis, { popisek, hodnota, textOk, typ } = {}) {
   return new Promise(resolve => {
-    S.dotaz = { nadpis, hodnota: hodnota || '', textOk: textOk || 'Uložit', resolve };
+    S.dotaz = { nadpis, popisek, hodnota: hodnota || '', textOk: textOk || 'Uložit', typ, resolve };
     vykresli();
     setTimeout(() => { const el = $('#dotazVstup'); if (el) { el.focus(); el.select(); } }, 0);
   });
@@ -165,23 +183,22 @@ function zeptat(nadpis, hodnota, textOk) {
 function dotazOkno() {
   const p = S.dotaz;
   if (!p) return null;
-  const zavri = v => { S.dotaz = null; vykresli(); p.resolve(v); };
+  const zavri = v => { S.dotaz = null; vykresli(); p.resolve(v === undefined ? null : v); };
   const odesli = () => zavri($('#dotazVstup').value.trim());
-  return [
-    h('div', { class: 'zakryt', onclick: () => zavri(null) }),
-    h('div', { class: 'potvrzeni' },
-      h('h3', {}, p.nadpis),
+  return dialogOkno({
+    kicker: 'Zadání', nadpis: p.nadpis, zavri: () => zavri(null),
+    telo: [
+      p.popisek && h('label', { class: 'popisek' }, p.popisek),
       h('input', {
-        id: 'dotazVstup', class: 'input', value: p.hodnota, style: 'width:100%;padding:8px 10px',
-        onkeydown: e => {
-          if (e.key === 'Enter') { e.preventDefault(); odesli(); }
-          if (e.key === 'Escape') { e.preventDefault(); zavri(null); }
-        },
+        id: 'dotazVstup', class: 'input', type: p.typ || 'text', value: p.hodnota, style: 'width:100%;padding:8px 10px',
+        onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); odesli(); } },
       }),
-      h('div', { style: 'display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-4)' },
-        h('button', { class: 'btn btn-ghost', onclick: () => zavri(null) }, 'Zrušit'),
-        h('button', { class: 'btn btn-primary', onclick: odesli }, p.textOk))),
-  ];
+    ],
+    tlacitka: [
+      h('button', { class: 'btn btn-ghost', onclick: () => zavri(null) }, 'Zrušit'),
+      h('button', { class: 'btn btn-primary', onclick: odesli }, p.textOk),
+    ],
+  });
 }
 
 // Formulář pro nového uživatele — jedno okno místo tří nativních promptů za sebou.
@@ -199,19 +216,20 @@ function novyUzivatelOkno() {
   const pole = (id, label, typ) => [
     h('label', { class: 'popisek' }, label),
     h('input', { id, class: 'input', type: typ || 'text', style: 'width:100%;padding:8px 10px;margin-bottom:var(--space-3)',
-      onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); odesli(); } if (e.key === 'Escape') { e.preventDefault(); zavri(); } } }),
+      onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); odesli(); } } }),
   ];
-  return [
-    h('div', { class: 'zakryt', onclick: zavri }),
-    h('div', { class: 'potvrzeni' },
-      h('h3', {}, 'Přidat uživatele'),
+  return dialogOkno({
+    kicker: 'Nastavení', nadpis: 'Přidat uživatele', zavri,
+    telo: [
       pole('nuJmeno', 'Jméno'),
       pole('nuEmail', 'E-mail'),
       pole('nuHeslo', 'Heslo (nepovinné, výchozí „cadmia")', 'password'),
-      h('div', { style: 'display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-4)' },
-        h('button', { class: 'btn btn-ghost', onclick: zavri }, 'Zrušit'),
-        h('button', { class: 'btn btn-primary', onclick: odesli }, 'Přidat'))),
-  ];
+    ],
+    tlacitka: [
+      h('button', { class: 'btn btn-ghost', onclick: zavri }, 'Zrušit'),
+      h('button', { class: 'btn btn-primary', onclick: odesli }, 'Přidat'),
+    ],
+  });
 }
 
 async function nactiStav() {
@@ -789,7 +807,7 @@ async function otevri(cislo) {
   } catch (e) { S.open = null; hlas(e); }
 }
 async function novaZakazka() {
-  const jmeno = await zeptat('Jméno zákazníka nebo firmy', '');
+  const jmeno = await zeptat('Nová zakázka', { popisek: 'Jméno zákazníka nebo firmy', textOk: 'Založit' });
   if (jmeno === null) return;
   try {
     const v = await api('nova-zakazka', { jmeno: jmeno || 'Nový zákazník' });
@@ -2010,7 +2028,7 @@ function obrazovkaNastaveni() {
               + ';border:0;border-radius:var(--radius-md);padding:5px 9px;cursor:pointer;font-size:13px',
             onclick: () => { S.sloupce[i].skryt = !c.skryt; ulozSloupce(); } }, c.skryt ? 'skrytý' : 'na tabuli')))),
       h('button', { class: 'btn btn-secondary', style: 'margin-top:var(--space-3)', onclick: async () => {
-        const nazev = await zeptat('Název nového sloupce', 'Nový sloupec');
+        const nazev = await zeptat('Nový sloupec', { popisek: 'Název sloupce', hodnota: 'Nový sloupec', textOk: 'Přidat' });
         if (!nazev) return;
         S.sloupce.push({ klic: 'vlastni' + Date.now(), nazev, skryt: false, novy: true });
         ulozSloupce();
@@ -2046,7 +2064,11 @@ function obrazovkaNastaveni() {
             !t.inHouse && S.stroje.filter(s => s.tiskarnaId === t.id).length === 0
               && h('span', { style: 'font-size:13px;color:var(--muted)' }, 'externí kooperace — bez vlastního stroje'),
             h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:13px;align-self:flex-start', onclick: async () => {
-              const oznaceni = await zeptat('Označení nového stroje', t.klic + '-' + (S.stroje.filter(s => s.tiskarnaId === t.id).length + 1));
+              const oznaceni = await zeptat('Nový stroj', {
+                popisek: 'Označení stroje (' + t.nazev + ')',
+                hodnota: t.klic + '-' + (S.stroje.filter(s => s.tiskarnaId === t.id).length + 1),
+                textOk: 'Přidat',
+              });
               if (!oznaceni) return;
               ulozStroj({ tiskarnaId: t.id, oznaceni });
             } }, '+ přidat stroj')))))),
@@ -2115,7 +2137,7 @@ function obrazovkaNastaveni() {
                 u.aktivni ? 'aktivní' : 'deaktivovaný')),
             h('td', {},
               h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px', onclick: async () => {
-                const heslo = await zeptat('Nové heslo pro ' + u.jmeno, '');
+                const heslo = await zeptat('Nové heslo', { popisek: 'Heslo pro ' + u.jmeno, typ: 'password', textOk: 'Uložit' });
                 if (heslo) ulozUzivatele({ klic: u.klic, heslo });
               } }, 'Změnit'))))))),
       h('button', { class: 'btn btn-secondary', style: 'margin-top:var(--space-3)',
