@@ -15,8 +15,9 @@ Aktualizováno: 13. 9. 2026
 
 - [x] Sjednotit všechny vyskakovací dialogy a chyby do jednoho stylu appky — nahrazeny nativní `prompt()`/`confirm()` (nová zakázka, sloupec, stroj, heslo, nový uživatel, mazání) jedním sdíleným dialogovým oknem (kicker + teal nadpis, stejné ovládání/zavírání jako zbytek appky). Nativní dialogy navíc na dotyku vadily a v automatizaci/některých prohlížečích uměly zamrazit stránku.
 - [x] Zkrátit běžnou kartu na tabuli — zůstal zákazník, termín, cena, materiál/technologie a jeden problémový štítek; seznam rozpracovaných souborů a průběh tisku (%) jsou pryč z karty (zůstávají v detailu a v přehledu Výroby). Nasazeno a ověřeno.
-- [ ] Doplnit do „Dnes“ přímé filtry/akce pro jednotlivé skupiny (po termínu, čeká na zákazníka, výroba), nejen jejich seznam.
+- [x] Doplnit do „Dnes“ přímé filtry/akce pro jednotlivé skupiny — každá skupina (Hoří/Čeká na reakci/Ve výrobě) má tlačítko „Zobrazit na tabuli“, které otevře tabuli přefiltrovanou přesně na tu skupinu (jde na ní přetahovat karty a dělat hromadné akce). Nasazeno a ověřeno. Mimoto opravena barva technologie na kartě pro položky s jinou velikostí písmen (např. „Resin“ z kalkulátoru vs. „RESIN“ v registru tiskáren).
 - [ ] Upravovat rozložení pro tablet: větší cíle pro dotek, pohodlnější změna stavu bez drag-and-dropu a otestovat šířky obrazovek.
+- [ ] **Zjištěno při ladění barev:** filtr technologie na tabuli (`Kdokoli/Všechny technologie/…`) nabízí „SLA“, ale položky z kalkulátoru mají technologii uloženou jako „Resin“ — filtr na SLA/RESIN tak nikdy nic nenajde. Sjednotit název (buď filtr přejmenovat na „Resin“, nebo zjistit u kalkulátoru, proč neposílá „SLA“).
 - [ ] V detailu vyhodnotit další rychlé akce podle skutečné práce dílny — typicky přiřazení člověka, změna stavu a odpověď zákazníkovi.
 
 ## Priorita 3 — provoz a bezpečnost
