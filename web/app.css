@@ -160,7 +160,6 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
 .karta .zakaznik { font-family: var(--font-heading); font-weight: 700; font-size: 21px; line-height: 1.1;
   text-transform: uppercase; color: var(--teal); }
 .karta .souhrn { font-size: 15px; color: var(--muted-2); }
-.karta .tiskne-se { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .karta .radek3 { display: flex; align-items: baseline; gap: var(--space-2); font-size: 16px; }
 .karta .ini { margin-left: auto; display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
   align-items: center; justify-content: center; font-size: 11px; }

@@ -743,21 +743,15 @@ function karta(z) {
           '✱ ručně'),
         h('span', { class: 'prio', style: 'color:' + dnyBarva, title: 'priorita: ' + p.label }, dnyZnacka)),
 
+      // Karta na tabuli ukazuje jen zákazníka, termín, cenu, materiál/technologii
+      // a jeden problémový štítek — počet dílů/kusů, rozpracované soubory
+      // a průběh tisku jsou vidět až v detailu a v přehledu Výroby.
       h('div', { class: 'radek2' },
         z.tech && h('div', { class: 'nahled', style: techZnackaStyl(z.tech),
           title: 'Technologie tisku: ' + z.tech }, z.tech),
         h('div', { style: 'min-width:0' },
           h('div', { class: 'zakaznik' }, z.zakaznik),
-          h('div', { class: 'souhrn' },
-            [z.tech, z.material].filter(Boolean).join(' · ')
-            + (z.dilu ? ' · ' + z.dilu + (z.dilu === 1 ? ' díl' : ' díly') + ' / ' + z.ks + ' ks' : '')),
-          (z.dily || []).length > 0 && h('div', { class: 'tiskne-se' },
-            z.dily.map(d => d.pocet + '× ' + d.nazev).join(', ')),
-          z.procentoHotovo > 0 && z.procentoHotovo < 100 && h('div', {
-              style: 'margin-top:4px', title: z.procentoHotovo + ' % kusů má za sebou dokončenou tiskovou úlohu' },
-            h('div', { style: 'height:5px;background:var(--line)' },
-              h('div', { style: 'height:5px;background:var(--teal);width:' + z.procentoHotovo + '%' })),
-            h('div', { style: 'font-size:12px;color:var(--muted);margin-top:2px' }, z.procentoHotovo + ' % hotovo')))),
+          h('div', { class: 'souhrn' }, [z.tech, z.material].filter(Boolean).join(' · ')))),
 
       h('div', { class: 'radek3' },
         h('span', { style: 'font-weight:600' }, kc(z.celkem)),
