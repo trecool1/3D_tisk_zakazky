@@ -1600,11 +1600,23 @@ async function planAutoNavrh() {
   const d = await api('navrh');
   const p = await api('planovani');
   S.planPool = p.zakazky.map(g => ({ cislo: g.cislo, zakaznik: g.zakaznik, termin: g.termin, dnuDoTerminu: g.dnuDoTerminu, polozky: g.polozky.map(x => ({ ...x, move: x.pocet })) }));
+
+  // Server navrhuje ze všech nepřiřazených dílů bez ohledu na to, co je zrovna
+  // vidět — když má obsluha aktivní hledání/filtr (typicky plánování jedné
+  // konkrétní zakázky z detailu), omezíme návrh jen na to, co skutečně vidí.
+  // Jinak by "pro vše" tiše naplánovalo i cizí zakázky mimo aktuální pohled.
+  const viditelneId = (S.planHledani || S.planFTech)
+    ? new Set(planPoolFiltrovana().flatMap(g => g.polozky.map(x => x.id)))
+    : null;
+
   S.planJobs = d.navrhy.map(n => ({
     key: 'k' + (++S.planSeq), tiskarnaId: n.tiskarnaId, tiskarnaNazev: n.tiskarna, material: n.material, strojId: n.strojId,
-    polozky: n.polozky.map(p => ({ id: p.id, nazev: p.nazev, pocet: p.pocet, perjob: p.perjob, zakazkaCislo: p.zakazkaCislo })),
-  }));
-  // pool je čerstvě načtený (obsahuje i díly z návrhu) — odebereme je, ať zůstane jen opravdu volné
+    polozky: n.polozky
+      .filter(p => !viditelneId || viditelneId.has(p.id))
+      .map(p => ({ id: p.id, nazev: p.nazev, pocet: p.pocet, perjob: p.perjob, zakazkaCislo: p.zakazkaCislo })),
+  })).filter(j => j.polozky.length > 0);
+  // pool je čerstvě načtený (obsahuje i díly z návrhu) — odebereme jen to, co jsme
+  // opravdu zařadili do úlohy, ať zůstane v poolu i to vyfiltrované mimo návrh
   S.planJobs.forEach(j => j.polozky.forEach(p => planOdeberZPoolu(p.id, p.pocet)));
   const nesparovano = Object.entries(d.nesparovaneTiskarny || {});
   if (nesparovano.length) hlas(new Error('Nespárovaná tiskárna (chybí v registru): ' + nesparovano.map(([n, c]) => n + ' (' + c + ' ks)').join(', ')));
@@ -1694,7 +1706,8 @@ function planovaniScreen() {
       h('div', { style: 'min-width:0' },
         h('div', { style: 'position:sticky;top:var(--space-4)' },
           h('div', { style: 'display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-4)' },
-            h('button', { class: 'btn btn-ghost', onclick: planAutoNavrh }, 'Automatický návrh pro vše'),
+            h('button', { class: 'btn btn-ghost', onclick: planAutoNavrh },
+              (S.planHledani || S.planFTech) ? 'Automatický návrh pro vyfiltrované' : 'Automatický návrh pro vše'),
             h('button', { class: 'btn btn-ghost', onclick: planVyprazdnit }, 'Vyprázdnit'),
             h('button', { class: 'btn btn-primary', disabled: S.planJobs.length === 0, onclick: planPotvrdit },
               'Potvrdit a odeslat do tisku')),
