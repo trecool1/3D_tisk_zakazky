@@ -97,7 +97,7 @@ const S = {
   nastaveniData: null, tiskarny: [], stroje: [], vyroba: [], dragUloha: null, pubCislo: null, kopirovano: false,
   vyrobaStrojId: null, vyrobaObrazovka: 'prehled', planPool: [], planJobs: [], dragItem: null, planSeq: 0,
   planHledani: '', planFTech: '', planZakazka: null,
-  chyba: '', nacitam: false, potvrzeni: null,
+  chyba: '', nacitam: false, potvrzeni: null, dotaz: null, novyUzivatel: null,
 };
 
 /* ---------- API ---------- */
@@ -148,6 +148,69 @@ function potvrzeniOkno() {
       h('div', { style: 'display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-4)' },
         h('button', { class: 'btn btn-ghost', onclick: () => zavri(false) }, 'Zrušit'),
         h('button', { class: 'btn btn-primary', onclick: () => zavri(true) }, p.textOk))),
+  ];
+}
+
+// Textový dotaz ve stylu appky místo nativního prompt() — vrací Promise<string|null>.
+// Nativní prompt/confirm na dotyku působí neohrabaně a v některých prohlížečích
+// (i automatizovaných) blokuje celou stránku, dokud ho uživatel ručně nezavře.
+function zeptat(nadpis, hodnota, textOk) {
+  return new Promise(resolve => {
+    S.dotaz = { nadpis, hodnota: hodnota || '', textOk: textOk || 'Uložit', resolve };
+    vykresli();
+    setTimeout(() => { const el = $('#dotazVstup'); if (el) { el.focus(); el.select(); } }, 0);
+  });
+}
+
+function dotazOkno() {
+  const p = S.dotaz;
+  if (!p) return null;
+  const zavri = v => { S.dotaz = null; vykresli(); p.resolve(v); };
+  const odesli = () => zavri($('#dotazVstup').value.trim());
+  return [
+    h('div', { class: 'zakryt', onclick: () => zavri(null) }),
+    h('div', { class: 'potvrzeni' },
+      h('h3', {}, p.nadpis),
+      h('input', {
+        id: 'dotazVstup', class: 'input', value: p.hodnota, style: 'width:100%;padding:8px 10px',
+        onkeydown: e => {
+          if (e.key === 'Enter') { e.preventDefault(); odesli(); }
+          if (e.key === 'Escape') { e.preventDefault(); zavri(null); }
+        },
+      }),
+      h('div', { style: 'display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-4)' },
+        h('button', { class: 'btn btn-ghost', onclick: () => zavri(null) }, 'Zrušit'),
+        h('button', { class: 'btn btn-primary', onclick: odesli }, p.textOk))),
+  ];
+}
+
+// Formulář pro nového uživatele — jedno okno místo tří nativních promptů za sebou.
+function novyUzivatelOkno() {
+  if (!S.novyUzivatel) return null;
+  const zavri = () => { S.novyUzivatel = null; vykresli(); };
+  const odesli = () => {
+    const jmeno = $('#nuJmeno').value.trim();
+    if (!jmeno) return;
+    const email = $('#nuEmail').value.trim();
+    const heslo = $('#nuHeslo').value || 'cadmia';
+    zavri();
+    ulozUzivatele({ jmeno, email, heslo, role: 'dilna' });
+  };
+  const pole = (id, label, typ) => [
+    h('label', { class: 'popisek' }, label),
+    h('input', { id, class: 'input', type: typ || 'text', style: 'width:100%;padding:8px 10px;margin-bottom:var(--space-3)',
+      onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); odesli(); } if (e.key === 'Escape') { e.preventDefault(); zavri(); } } }),
+  ];
+  return [
+    h('div', { class: 'zakryt', onclick: zavri }),
+    h('div', { class: 'potvrzeni' },
+      h('h3', {}, 'Přidat uživatele'),
+      pole('nuJmeno', 'Jméno'),
+      pole('nuEmail', 'E-mail'),
+      pole('nuHeslo', 'Heslo (nepovinné, výchozí „cadmia")', 'password'),
+      h('div', { style: 'display:flex;justify-content:flex-end;gap:var(--space-2);margin-top:var(--space-4)' },
+        h('button', { class: 'btn btn-ghost', onclick: zavri }, 'Zrušit'),
+        h('button', { class: 'btn btn-primary', onclick: odesli }, 'Přidat'))),
   ];
 }
 
@@ -726,7 +789,7 @@ async function otevri(cislo) {
   } catch (e) { S.open = null; hlas(e); }
 }
 async function novaZakazka() {
-  const jmeno = prompt('Jméno zákazníka nebo firmy:', '');
+  const jmeno = await zeptat('Jméno zákazníka nebo firmy', '');
   if (jmeno === null) return;
   try {
     const v = await api('nova-zakazka', { jmeno: jmeno || 'Nový zákazník' });
@@ -1019,7 +1082,7 @@ function historieZmen(z) {
           h('span', { style: 'font-size:15px;flex:1;min-width:180px' }, x.co.replace(' — ' + x.kdo, '')),
           x.lzeVratit && muzeMenit() && h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px',
             onclick: async () => {
-              if (!confirm('Vrátit zakázku do stavu před touto změnou? Novější změny se zahodí.')) return;
+              if (!await potvrdit('Vrátit změnu?', 'Vrátit zakázku do stavu před touto změnou? Novější změny se zahodí.', 'Vrátit')) return;
               try { await api('vratit', { cislo: z.cislo, historie: x.id }); await obnov(); } catch (e) { hlas(e); }
             } }, 'Vrátit sem')))),
       h('div', { style: 'font-size:14px;color:var(--muted);margin-top:var(--space-2);max-width:60ch' },
@@ -1198,7 +1261,7 @@ function konverzace(z) {
             h('span', {}, 'spárováno: ' + (m.parovani || 'ručně')),
             h('button', { class: 'btn btn-ghost', style: 'padding:1px 4px;font-size:12px;border:0;color:var(--teal-700)',
               onclick: async () => {
-                if (!confirm('Odpojit tuto zprávu od zakázky ' + z.cislo + ' a vrátit ji do Nezařazeno?')) return;
+                if (!await potvrdit('Odpojit zprávu?', 'Odpojit tuto zprávu od zakázky ' + z.cislo + ' a vrátit ji do Nezařazeno?', 'Odpojit')) return;
                 try { await api('zprava-odpoj', { cislo: z.cislo, zprava: m.id }); await obnov(); }
                 catch (e) { hlas(e); }
               } }, 'odpojit → Nezařazeno'))));
@@ -1902,7 +1965,7 @@ function obrazovkaNezarazeno() {
                   S.nezarazeno = await api('nezarazeno'); await obnov(false); } catch (e) { hlas(e); }
           } }, 'Přiřadit'),
           h('button', { class: 'btn btn-ghost', onclick: async () => {
-            if (!confirm('Zahodit tuto zprávu?')) return;
+            if (!await potvrdit('Zahodit zprávu?', 'Zahodit tuto zprávu?', 'Zahodit')) return;
             try { await api('nezarazeno-zahodit', { id: m.id });
                   S.nezarazeno = await api('nezarazeno'); await obnov(false); } catch (e) { hlas(e); }
           } }, 'Zahodit')))),
@@ -1946,8 +2009,8 @@ function obrazovkaNastaveni() {
               + ';color:' + (c.skryt ? 'var(--muted-2)' : 'var(--teal-700)')
               + ';border:0;border-radius:var(--radius-md);padding:5px 9px;cursor:pointer;font-size:13px',
             onclick: () => { S.sloupce[i].skryt = !c.skryt; ulozSloupce(); } }, c.skryt ? 'skrytý' : 'na tabuli')))),
-      h('button', { class: 'btn btn-secondary', style: 'margin-top:var(--space-3)', onclick: () => {
-        const nazev = prompt('Název nového sloupce:', 'Nový sloupec');
+      h('button', { class: 'btn btn-secondary', style: 'margin-top:var(--space-3)', onclick: async () => {
+        const nazev = await zeptat('Název nového sloupce', 'Nový sloupec');
         if (!nazev) return;
         S.sloupce.push({ klic: 'vlastni' + Date.now(), nazev, skryt: false, novy: true });
         ulozSloupce();
@@ -1982,8 +2045,8 @@ function obrazovkaNastaveni() {
               h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:12px', onclick: () => smazStroj(s) }, 'smazat'))),
             !t.inHouse && S.stroje.filter(s => s.tiskarnaId === t.id).length === 0
               && h('span', { style: 'font-size:13px;color:var(--muted)' }, 'externí kooperace — bez vlastního stroje'),
-            h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:13px;align-self:flex-start', onclick: () => {
-              const oznaceni = prompt('Označení nového stroje:', t.klic + '-' + (S.stroje.filter(s => s.tiskarnaId === t.id).length + 1));
+            h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px;font-size:13px;align-self:flex-start', onclick: async () => {
+              const oznaceni = await zeptat('Označení nového stroje', t.klic + '-' + (S.stroje.filter(s => s.tiskarnaId === t.id).length + 1));
               if (!oznaceni) return;
               ulozStroj({ tiskarnaId: t.id, oznaceni });
             } }, '+ přidat stroj')))))),
@@ -2051,17 +2114,12 @@ function obrazovkaNastaveni() {
                 onclick: () => ulozUzivatele({ klic: u.klic, aktivni: !u.aktivni }) },
                 u.aktivni ? 'aktivní' : 'deaktivovaný')),
             h('td', {},
-              h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px', onclick: () => {
-                const heslo = prompt('Nové heslo pro ' + u.jmeno + ':', '');
+              h('button', { class: 'btn btn-ghost', style: 'padding:2px 8px', onclick: async () => {
+                const heslo = await zeptat('Nové heslo pro ' + u.jmeno, '');
                 if (heslo) ulozUzivatele({ klic: u.klic, heslo });
               } }, 'Změnit'))))))),
-      h('button', { class: 'btn btn-secondary', style: 'margin-top:var(--space-3)', onclick: () => {
-        const jmeno = prompt('Jméno nového uživatele:', '');
-        if (!jmeno) return;
-        const email = prompt('E-mail:', '') || '';
-        const heslo = prompt('Heslo:', '') || 'cadmia';
-        ulozUzivatele({ jmeno, email, heslo, role: 'dilna' });
-      } }, 'Přidat uživatele')),
+      h('button', { class: 'btn btn-secondary', style: 'margin-top:var(--space-3)',
+        onclick: () => { S.novyUzivatel = true; vykresli(); } }, 'Přidat uživatele')),
 
     /* napojení */
     h('section', {},
@@ -2090,7 +2148,7 @@ async function ulozStroj(s) {
   try { await api('stroj-uloz', s); await nactiTiskarny(); } catch (e) { hlas(e); }
 }
 async function smazTiskarnu(t) {
-  if (!confirm('Smazat tiskárnu ' + t.nazev + '? Deaktivují se i její stroje — nepůjde dál navrhovat na výrobu.')) return;
+  if (!await potvrdit('Smazat tiskárnu?', 'Smazat tiskárnu ' + t.nazev + '? Deaktivují se i její stroje — nepůjde dál navrhovat na výrobu.', 'Smazat')) return;
   try { await api('tiskarna-uloz', { klic: t.klic, smazat: true }); await nactiTiskarny(); } catch (e) { hlas(e); }
 }
 async function smazStroj(s) {
@@ -2177,7 +2235,9 @@ function vykresli() {
       S.chyba && h('div', { class: 'chyba-pruh' }, S.chyba),
       (podle[view] || obrazovkaTabule)(),
       S.open && detailPanel(),
-      S.potvrzeni && potvrzeniOkno());
+      S.potvrzeni && potvrzeniOkno(),
+      S.dotaz && dotazOkno(),
+      S.novyUzivatel && novyUzivatelOkno());
   }
 
   const novy = h('div', { id: 'app' }, obsah);
