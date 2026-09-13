@@ -181,6 +181,28 @@ function stavZakazkyPodleUloh(int $zakazkaId): ?string {
   return 'fronta';
 }
 
+/**
+ * Kolik procent kusů zakázky už prošlo dokončenou tiskovou úlohou — nezávisle na
+ * stavZakazkyPodleUloh() (ten řeší sloupec na tabuli, tohle jen poměr kusů).
+ * Vrací null, když zakázka nemá žádné položky.
+ */
+function procentoHotovo(int $zakazkaId): ?int {
+  $qCelkem = db()->prepare('SELECT COALESCE(SUM(pocet), 0) FROM polozky WHERE zakazka_id = ?');
+  $qCelkem->execute([$zakazkaId]);
+  $celkem = (int)$qCelkem->fetchColumn();
+  if ($celkem === 0) return null;
+
+  $qHotovo = db()->prepare(
+    'SELECT COALESCE(SUM(up.pocet), 0) FROM uloha_polozky up
+       JOIN polozky p ON p.id = up.polozka_id
+       JOIN tiskove_ulohy u ON u.id = up.uloha_id
+      WHERE p.zakazka_id = ? AND u.stav = "hotovo"');
+  $qHotovo->execute([$zakazkaId]);
+  $hotovo = (int)$qHotovo->fetchColumn();
+
+  return (int)round(100 * $hotovo / $celkem);
+}
+
 /** Přepočte a uloží automatický stav (jen u karet, které to mají zapnuté). */
 function synchronizujStavZakazek(array $zakazkaIds): void {
   foreach (array_unique($zakazkaIds) as $zid) {
@@ -213,7 +235,7 @@ function jeExpres(string $rychlost): bool {
  */
 function polozkyKPotisku(): array {
   $q = db()->query(
-    "SELECT p.*, z.cislo AS zakazka_cislo, z.vytvoreno AS zakazka_vytvoreno,
+    "SELECT p.*, z.cislo AS zakazka_cislo, z.vytvoreno AS zakazka_vytvoreno, z.termin AS zakazka_termin,
             CASE WHEN z.zak_firma <> '' THEN z.zak_firma ELSE z.zak_jmeno END AS zakazka_zakaznik,
             COALESCE((SELECT SUM(up.pocet) FROM uloha_polozky up WHERE up.polozka_id = p.id), 0) AS jiz_planovano
        FROM polozky p JOIN zakazky z ON z.id = p.zakazka_id
@@ -241,12 +263,16 @@ function nepridelenaFronta(): array {
     $zid = (int)$p['zakazka_id'];
     if (!isset($poZakazce[$zid])) {
       $poZakazce[$zid] = ['cislo' => $p['zakazka_cislo'], 'zakaznik' => $p['zakazka_zakaznik'],
-                           'vytvoreno' => $p['zakazka_vytvoreno'], 'polozky' => []];
+                           'vytvoreno' => $p['zakazka_vytvoreno'],
+                           'termin' => substr((string)$p['zakazka_termin'], 0, 10),
+                           'dnuDoTerminu' => dnyDoTerminu(['termin' => $p['zakazka_termin']]),
+                           'polozky' => []];
     }
     $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
     $poZakazce[$zid]['polozky'][] = [
       'id' => (int)$p['id'], 'nazev' => $p['nazev'], 'material' => $p['material'],
       'tiskarnaNazev' => $p['tiskarna_nazev'], 'tiskarnaId' => $t ? (int)$t['id'] : null,
+      'tech' => $t ? $t['tech'] : '',
       'pocet' => (int)$p['zbyva'], 'perjob' => max(1, (int)$p['perjob']),
     ];
   }
@@ -264,12 +290,19 @@ function nepridelenaFronta(): array {
  * jen ten přesný model, pro který byla zakázka naceněná. Zatím vždy jedna
  * úloha na stroj (bez automatického dělení na víc desek podle kapacity) —
  * obsluha si to případně rozdělí ručně tlačítkem "Rozdělit na více úloh".
+ *
+ * S $jenZakazka omezeno na jednu zakázku — pro tlačítko "Naplánovat celou
+ * zakázku" na plánovací ploše. Díly se pořád seskupují podle tech|materiál,
+ * takže zakázka s více technologiemi (např. část SLS, část FDM) se sama
+ * rozpadne do samostatných úloh na odpovídající stroje — nejde to napasovat
+ * na jeden cílový stroj, protože každá technologie potřebuje jiný.
  */
-function navrhDavek(): array {
+function navrhDavek(?string $jenZakazka = null): array {
   $skupiny = [];
   $nesparovano = [];
 
   foreach (polozkyKPotisku() as $p) {
+    if ($jenZakazka !== null && $p['zakazka_cislo'] !== $jenZakazka) continue;
     if (jeExpres($p['rychlost'])) continue;
     $t = tiskarnaPodleNazvu($p['tiskarna_nazev']);
     if (!$t) { $nesparovano[$p['tiskarna_nazev']] = ($nesparovano[$p['tiskarna_nazev']] ?? 0) + $p['zbyva']; continue; }

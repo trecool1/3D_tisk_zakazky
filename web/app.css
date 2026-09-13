@@ -154,12 +154,13 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
 .karta .prio { margin-left: auto; font-family: var(--font-heading); font-weight: 600; font-size: 12px;
   letter-spacing: 0.1em; text-transform: uppercase; }
 .karta .radek2 { display: flex; gap: var(--space-2); align-items: flex-start; }
-.karta .nahled { width: 44px; height: 44px; flex: 0 0 auto; background: var(--line); display: flex;
-  align-items: center; justify-content: center; font-size: 10px; color: var(--muted-2); text-align: center;
-  line-height: 1.1; border-radius: var(--radius-sm); }
+.karta .nahled { width: 44px; height: 44px; flex: 0 0 auto; display: flex;
+  align-items: center; justify-content: center; font-family: var(--font-heading); font-weight: 700;
+  font-size: 12px; letter-spacing: 0.03em; text-align: center; line-height: 1.1; border-radius: var(--radius-sm); }
 .karta .zakaznik { font-family: var(--font-heading); font-weight: 700; font-size: 21px; line-height: 1.1;
   text-transform: uppercase; color: var(--teal); }
 .karta .souhrn { font-size: 15px; color: var(--muted-2); }
+.karta .tiskne-se { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .karta .radek3 { display: flex; align-items: baseline; gap: var(--space-2); font-size: 16px; }
 .karta .ini { margin-left: auto; display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
   align-items: center; justify-content: center; font-size: 11px; }
@@ -182,6 +183,13 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
   padding: var(--space-3) var(--space-4); }
 .varovani { background: var(--red-100); color: var(--red); padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md); font-size: 14px; margin-bottom: var(--space-6); }
+.potvrzeni { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 41;
+  width: min(480px, 92vw); max-height: 84vh; overflow-y: auto; background: var(--bg);
+  box-shadow: 0 8px 32px rgba(28,43,51,.24); padding: var(--space-6); }
+.potvrzeni h3 { margin: 0 0 var(--space-3); font-family: var(--font-heading); font-size: 20px;
+  text-transform: uppercase; color: var(--ink); }
+.potvrzeni p { margin: 0 0 var(--space-2); font-size: 14px; }
+.potvrzeni .varovani { margin-bottom: 0; }
 
 /* ---------- stránky ---------- */
 

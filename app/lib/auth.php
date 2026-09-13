@@ -6,6 +6,27 @@ declare(strict_types=1);
 
 const COOKIE_SEZENI = 'kanban_sid';
 
+/**
+ * Token pro ochranu zápisových požadavků z prohlížeče. Není uložený v cookie,
+ * aby ho cizí stránka nedokázala poslat spolu se sezením automaticky.
+ */
+function csrfToken(): string {
+  $sezeni = (string)($_COOKIE[COOKIE_SEZENI] ?? '');
+  if ($sezeni === '') return '';
+  // orderSecret je mimo webroot i git; fallback zachová funkčnost čisté lokální instalace.
+  $klic = (string)cfg('orderSecret', '');
+  if ($klic === '' || $klic === 'ZMEN_ME') $klic = __FILE__;
+  return hash_hmac('sha256', $sezeni, $klic);
+}
+
+function vyzadujCsrf(): void {
+  vyzadujPrihlaseni();
+  $poslany = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+  if ($poslany === '' || !hash_equals(csrfToken(), $poslany)) {
+    chyba('Neplatný bezpečnostní token. Obnovte stránku a akci zopakujte.', 403);
+  }
+}
+
 function prihlas(string $klic, string $heslo): ?array {
   $u = db()->prepare('SELECT * FROM uzivatele WHERE klic = ?');
   $u->execute([$klic]);
@@ -24,7 +45,9 @@ function prihlas(string $klic, string $heslo): ?array {
     'path'     => '/',
     'httponly' => true,
     'samesite' => 'Lax',
-    'secure'   => !empty($_SERVER['HTTPS']),
+    // Veřejný provoz končí na Cloudflare/tunelu a PHP pak vidí interní HTTP.
+    // Výchozí true proto nepovolí nechtěný přenos sezení po obyčejném HTTP.
+    'secure'   => (bool)cfg('secureCookies', true),
   ]);
   return ['uzivatel' => verejnyUzivatel($uziv)];
 }

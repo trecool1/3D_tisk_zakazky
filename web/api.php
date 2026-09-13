@@ -20,6 +20,18 @@ $v    = vstupJson();
 // Multipart požadavky (nahrání přílohy) nemají JSON tělo — parametry jsou v $_POST.
 if (!$v && !empty($_POST)) $v = $_POST;
 
+// Čtecí akce smějí přes GET. Vše ostatní mění stav (včetně otevření detailu,
+// které označí zprávy jako přečtené), a proto vyžaduje POST + CSRF token.
+$cteciAkce = ['me', 'uzivatele-login', 'stav', 'firmy', 'posta', 'nezarazeno',
+              'tiskarny', 'vyroba', 'planovani', 'navrh', 'nastaveni'];
+if (!in_array($akce, $cteciAkce, true) && $akce !== 'login') {
+  if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') chyba('Tato akce vyžaduje POST.', 405);
+  vyzadujCsrf();
+}
+if ($akce === 'login' && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+  chyba('Přihlášení vyžaduje POST.', 405);
+}
+
 // pomůcka: načti zakázku z parametru a ověř, že existuje
 $zakazka = function () use ($v): array {
   $z = zakazkaPodleCisla((string)($v['cislo'] ?? ''));
@@ -34,7 +46,8 @@ try {
 
     case 'me': {
       $u = ja();
-      odesliJson(['ok' => true, 'uzivatel' => $u ? verejnyUzivatel($u) : null]);
+      odesliJson(['ok' => true, 'uzivatel' => $u ? verejnyUzivatel($u) : null,
+                  'csrf' => $u ? csrfToken() : null]);
     }
 
     case 'uzivatele-login': {
@@ -48,9 +61,13 @@ try {
     case 'login': {
       uklidSezeni();
       $r = prihlas((string)($v['kdo'] ?? ''), (string)($v['heslo'] ?? ''));
-      if ($r === null)             chyba('Uživatel neexistuje.', 401);
-      if (isset($r['chyba']))      chyba($r['chyba'], 401);
-      odesliJson(['ok' => true, 'uzivatel' => $r['uzivatel']]);
+      // Stejná odpověď pro neexistující účet, deaktivovaný účet i špatné heslo.
+      // Neprozrazuje tak útočníkovi, které účty může zkoušet.
+      if ($r === null || isset($r['chyba'])) {
+        usleep(350000);
+        chyba('Nesprávné přihlašovací údaje.', 401);
+      }
+      odesliJson(['ok' => true, 'uzivatel' => $r['uzivatel'], 'csrf' => csrfToken()]);
     }
 
     case 'logout': {
@@ -153,6 +170,22 @@ try {
               ->execute([(string)$v['zasilka'], (int)$z['id']]);
           $zmeneno[] = 'číslo zásilky';
         }
+        if (array_key_exists('stavAuto', $v)) {
+          if (!empty($v['stavAuto'])) {
+            // znovu zapnout sledování výroby — rovnou dorovnat sloupec podle aktuálního stavu úloh,
+            // ať se karta nemusí čekat na další změnu ve výrobě
+            $novy = stavZakazkyPodleUloh((int)$z['id']);
+            if ($novy !== null && !in_array($novy, UZAVRENO, true)) {
+              db()->prepare('UPDATE zakazky SET stav_auto = 1, stav = ? WHERE id = ?')
+                  ->execute([$novy, (int)$z['id']]);
+            } else {
+              db()->prepare('UPDATE zakazky SET stav_auto = 1 WHERE id = ?')->execute([(int)$z['id']]);
+            }
+          } else {
+            db()->prepare('UPDATE zakazky SET stav_auto = 0 WHERE id = ?')->execute([(int)$z['id']]);
+          }
+          $zmeneno[] = 'sledování výroby';
+        }
       }, $zmeneno ? ('Změna: ' . implode(', ', $zmeneno) . ' — ' . mojeJmeno()) : null);
       odesliJson(['ok' => true]);
     }
@@ -168,8 +201,70 @@ try {
     case 'polozka-tech': {
       vyzadujZapis();
       $z = $zakazka();
-      zmenTechMaterial($z, (int)($v['polozka'] ?? 0), (string)($v['tiskarnaNazev'] ?? ''), (string)($v['material'] ?? ''));
-      historieZapis((int)$z['id'], 'Změna tiskárny/materiálu položky — ' . mojeJmeno(), snimek($z));
+      $polozkaId    = (int)($v['polozka'] ?? 0);
+      $novaTiskarna = trim((string)($v['tiskarnaNazev'] ?? ''));
+      $novyMaterial = trim((string)($v['material'] ?? ''));
+
+      $stara = null;
+      foreach (polozky((int)$z['id']) as $p) if ((int)$p['id'] === $polozkaId) { $stara = $p; break; }
+      $pred = snimek($z);
+
+      zmenTechMaterial($z, $polozkaId, $novaTiskarna, $novyMaterial);
+
+      if ($stara) {
+        $novaT     = $novaTiskarna !== '' ? tiskarnaPodleNazvu($novaTiskarna) : null;
+        $novyTech  = $novaT ? $novaT['tech'] : '';
+        $techZmena = (string)$stara['tech'] !== $novyTech ? ' — technologie ' . ((string)$stara['tech'] ?: '—') . ' → ' . ($novyTech ?: '—') : '';
+        $co = 'Změna tiskárny/materiálu u „' . $stara['nazev'] . '": '
+          . ((string)$stara['tiskarna_nazev'] ?: '—') . ' / ' . ((string)$stara['material'] ?: '—')
+          . ' → ' . ($novaTiskarna ?: '—') . ' / ' . ($novyMaterial ?: '—') . $techZmena
+          . ' — ' . mojeJmeno();
+      } else {
+        $co = 'Změna tiskárny/materiálu položky — ' . mojeJmeno();
+      }
+      historieZapis((int)$z['id'], $co, $pred);
+      odesliJson(['ok' => true]);
+    }
+
+    case 'konfigurace-uloz': {
+      vyzadujZapis();
+      $z    = $zakazka();
+      $konf = jsonDek($z['konfigurace'], []);
+      $pred = snimek($z);
+      $zmeny = [];
+
+      $textova = ['tech' => 'technologie', 'material' => 'materiál', 'barva' => 'barva',
+                  'uprava' => 'povrchová úprava', 'rychlost' => 'rychlost', 'vypln' => 'výplň'];
+      foreach ($textova as $klic => $label) {
+        if (!array_key_exists($klic, $v)) continue;
+        $nova  = trim((string)$v[$klic]);
+        $stara = (string)($konf[$klic] ?? '');
+        if ($nova === $stara) continue;
+        $konf[$klic] = $nova;
+        $zmeny[] = $label . ' ' . ($stara !== '' ? $stara : '—') . ' → ' . ($nova !== '' ? $nova : '—');
+      }
+      if (array_key_exists('dokonceni', $v)) {
+        $nove  = array_values(array_filter(array_map('trim', explode(',', (string)$v['dokonceni'])), fn($x) => $x !== ''));
+        $stare = (array)($konf['dokonceni'] ?? []);
+        if ($nove !== $stare) {
+          $konf['dokonceni'] = $nove;
+          $zmeny[] = 'dokončení ' . ($stare ? implode(', ', $stare) : '—') . ' → ' . ($nove ? implode(', ', $nove) : '—');
+        }
+      }
+
+      $novaTiskarna = array_key_exists('tiskarna', $v) ? trim((string)$v['tiskarna']) : null;
+      $novaJobs     = array_key_exists('jobs', $v) ? max(1, (int)$v['jobs']) : null;
+      if ($novaTiskarna !== null && $novaTiskarna !== (string)$z['tiskarna']) {
+        $zmeny[] = 'tiskárna (souhrn) ' . ((string)$z['tiskarna'] !== '' ? (string)$z['tiskarna'] : '—') . ' → ' . ($novaTiskarna !== '' ? $novaTiskarna : '—');
+      }
+      if ($novaJobs !== null && $novaJobs !== (int)$z['jobs']) {
+        $zmeny[] = 'tiskové úlohy ' . (int)$z['jobs'] . ' → ' . $novaJobs;
+      }
+
+      db()->prepare('UPDATE zakazky SET konfigurace = ?, tiskarna = COALESCE(?, tiskarna), jobs = COALESCE(?, jobs), zmeneno = ? WHERE id = ?')
+          ->execute([jsonEnk($konf), $novaTiskarna, $novaJobs, ted(), (int)$z['id']]);
+
+      if ($zmeny) historieZapis((int)$z['id'], 'Změna konfigurace tisku: ' . implode(', ', $zmeny) . ' — ' . mojeJmeno(), $pred);
       odesliJson(['ok' => true]);
     }
 
@@ -513,7 +608,8 @@ try {
 
     case 'navrh': {
       vyzadujPrihlaseni();
-      odesliJson(array_merge(['ok' => true], navrhDavek()));
+      $cislo = isset($v['cislo']) && $v['cislo'] !== '' ? (string)$v['cislo'] : null;
+      odesliJson(array_merge(['ok' => true], navrhDavek($cislo)));
     }
 
     case 'plan-potvrdit': {

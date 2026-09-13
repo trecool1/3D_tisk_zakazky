@@ -47,5 +47,6 @@ return [
 
   // --- provoz ---
   'sezeniDnu'  => 30,
+  'secureCookies' => true, // lokální HTTP dev výjimečně nastav na false
   'zalohDnu'   => 14,   // kolik denních záloh držet
 ];
