@@ -628,16 +628,16 @@ document.addEventListener('drop', zastavPageAutoScroll);
 /* ---------- přetažení karty (myš i dotyk, vlastní logika) ---------- */
 // Nativní HTML5 drag-and-drop se s myší chová hůř (poloprůhledný "duch" karty
 // nesleduje kurzor přesně) a na dotyku ho spousta mobilních prohlížečů vůbec
-// nespouští z prstu — proto obojí jede přes pointer events na jednom místě.
-// Myš: malý práh v pohybu kartu rovnou "chytí". Dotyk: dokud prst drží kartu
-// bez pohybu (~350 ms), nic se neděje a jde normálně scrollovat; pohyb dřív
-// scroll spustí (ručně, protože touch-action:none na kartě jinak scroll úplně
-// zablokuje) a dlouhý stisk kartu "chytí" za prst přesně jako na tabletu.
+// nespouští z prstu — proto obojí jede přes pointer events na jednom místě,
+// stejně pro myš i dotyk: krátký stisk a pohyb posouvá (sloupec svisle nebo
+// tabuli vodorovně, podle převažujícího směru), dlouhý stisk (~350 ms) beze
+// pohybu kartu "chytí" za kurzor/prst přesně jako na tabletu.
 const DLOUHY_STISK_MS = 350;
 let _pretDrag = null;
 
 function pretazeniZahaj(e, cislo) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  e.preventDefault();
   const el = e.currentTarget;
   const r = el.getBoundingClientRect();
   const sloupecKarty = el.closest('.sloupec-karty');
@@ -657,8 +657,7 @@ function pretazeniZahaj(e, cislo) {
   document.addEventListener('pointermove', pretazeniPohyb);
   document.addEventListener('pointerup', pretazeniKonec);
   document.addEventListener('pointercancel', pretazeniKonec);
-  if (e.pointerType === 'mouse') e.preventDefault();
-  else _pretDrag.timer = setTimeout(pretazeniAktivuj, DLOUHY_STISK_MS);
+  _pretDrag.timer = setTimeout(pretazeniAktivuj, DLOUHY_STISK_MS);
 }
 
 function pretazeniAktivuj() {
@@ -683,18 +682,15 @@ function pretazeniPohyb(e) {
   const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
 
   if (!d.aktivni) {
-    if (d.pointerType === 'mouse') {
-      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
-      pretazeniAktivuj();
-    } else {
-      // dotyk před "chycením": buď ještě čekáme na dlouhý stisk (malé chvění
-      // prstu nevadí), nebo se pohyb už vyhodnotil jako scroll a jen ho vedeme
-      if (!d.scrollLocked && Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      if (!d.scrollLocked) { d.scrollLocked = true; if (d.timer) { clearTimeout(d.timer); d.timer = null; } }
-      if (Math.abs(dy) >= Math.abs(dx)) { if (d.sloupecKarty) d.sloupecKarty.scrollTop = d.sloupecScrollStart - dy; }
-      else if (d.tabule) d.tabule.scrollLeft = d.tabuleScrollStart - dx;
-      return;
-    }
+    // před "chycením" (myš i dotyk stejně): buď ještě čekáme na dlouhý stisk
+    // (malé chvění nevadí), nebo se pohyb už vyhodnotil jako posun a jen ho
+    // vedeme — ručně, protože touch-action:none na kartě jinak scroll úplně
+    // zablokuje a myš nemá k posunu žádné vlastní gesto.
+    if (!d.scrollLocked && Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    if (!d.scrollLocked) { d.scrollLocked = true; if (d.timer) { clearTimeout(d.timer); d.timer = null; } }
+    if (Math.abs(dy) >= Math.abs(dx)) { if (d.sloupecKarty) d.sloupecKarty.scrollTop = d.sloupecScrollStart - dy; }
+    else if (d.tabule) d.tabule.scrollLeft = d.tabuleScrollStart - dx;
+    return;
   }
 
   e.preventDefault();
@@ -724,9 +720,10 @@ function pretazeniKonec(e) {
   if (d.ghost) d.ghost.remove();
   const cislo = d.cislo, cilKarta = d.nad, cilKlic = S.dragOver, bylAktivni = d.aktivni;
   S.drag = null; S.dragOver = null;
-  // klik (bez tažení) na dotyku pustí normální click → otevri() z onclick na kartě;
-  // na myši preventDefault() na začátku click potlačí, proto tu otevri() zavoláme sami
-  if (!bylAktivni) { if (d.pointerType === 'mouse') { d.el.focus(); otevri(cislo); } return; }
+  // preventDefault() na začátku potlačí nativní click (myš i dotyk) — čistý
+  // klik/ťuknutí bez pohybu proto otevřeme sami; když šlo o posun (scrollLocked),
+  // otevírat nic nemá, to už jen doscrolloval
+  if (!bylAktivni) { if (!d.scrollLocked) { d.el.focus(); otevri(cislo); } return; }
   const zdroj = S.zakazky.find(x => x.cislo === cislo);
   const cil = cilKarta ? S.zakazky.find(x => x.cislo === cilKarta) : null;
   // pustit na kartu ve stejném sloupci = ruční pořadí, jinak přesun do sloupce cíle
@@ -736,11 +733,12 @@ function pretazeniKonec(e) {
   else prekresliTabuli();
 }
 
-/* ---------- posun tabule myší po prázdné ploše ---------- */
-// Na dotyku se tabule přirozeně posouvá tažením prstu (nativní scroll, beze
-// změny). S myší k tomu není žádné gesto, jen kolečko — jde ji ale i s myší
-// "chytit" za prázdné místo (mimo kartu a ovládací prvky) a přetáhnout do
-// stran stejně jako swipe na tabletu.
+/* ---------- posun tabule i sloupce myší po prázdné ploše ---------- */
+// Na dotyku se tabule i dlouhý sloupec přirozeně posouvají tažením prstu
+// (nativní scroll, beze změny). S myší k tomu není žádné gesto, jen kolečko —
+// jde to ale i s myší "chytit" za prázdné místo (mimo kartu a ovládací prvky)
+// a přetáhnout: vodorovně tabuli mezi sloupci, svisle sloupec pod kurzorem
+// (typicky prázdný pruh pod poslední kartou) — stejně jako swipe na tabletu.
 let _panDrag = null;
 
 function panZahaj(e) {
@@ -748,7 +746,11 @@ function panZahaj(e) {
   if (e.target.closest('.karta, button, select, input, a')) return;
   e.preventDefault();
   const el = e.currentTarget;
-  _panDrag = { el, startX: e.clientX, scrollStart: el.scrollLeft };
+  const sloupecKarty = e.target.closest('.sloupec-karty');
+  _panDrag = {
+    el, startX: e.clientX, startY: e.clientY, scrollStart: el.scrollLeft,
+    sloupecKarty, sloupecScrollStart: sloupecKarty ? sloupecKarty.scrollTop : 0,
+  };
   try { el.setPointerCapture(e.pointerId); } catch { /* viz pretazeniZahaj výše */ }
   document.addEventListener('pointermove', panPohyb);
   document.addEventListener('pointerup', panKonec);
@@ -760,6 +762,7 @@ function panPohyb(e) {
   if (!p) return;
   p.el.classList.add('tabule-tazena');
   p.el.scrollLeft = p.scrollStart - (e.clientX - p.startX);
+  if (p.sloupecKarty) p.sloupecKarty.scrollTop = p.sloupecScrollStart - (e.clientY - p.startY);
 }
 
 function panKonec(e) {
