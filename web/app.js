@@ -625,47 +625,79 @@ document.addEventListener('dragover', e => {
 document.addEventListener('dragend', zastavPageAutoScroll);
 document.addEventListener('drop', zastavPageAutoScroll);
 
-/* ---------- přetažení karty myší ---------- */
-// Nativní HTML5 drag-and-drop se s myší chová hůř než na dotyku — poloprůhledný
-// "duch" karty, co nesleduje kurzor přesně a znatelně za ním zaostává. Pro myš
-// proto kartu vedeme vlastní logikou přesně pod ukazatelem; na dotyku (tablet,
-// telefon) native DnD funguje dobře, tam necháváme beze změny — pretazeniZahaj
-// se pro jiný než "mouse" pointer vůbec nespustí, takže draggable/ondrag* na
-// kartě (viz karta() níže) zůstává pro dotyk plně funkční vedle tohohle.
+/* ---------- přetažení karty (myš i dotyk, vlastní logika) ---------- */
+// Nativní HTML5 drag-and-drop se s myší chová hůř (poloprůhledný "duch" karty
+// nesleduje kurzor přesně) a na dotyku ho spousta mobilních prohlížečů vůbec
+// nespouští z prstu — proto obojí jede přes pointer events na jednom místě.
+// Myš: malý práh v pohybu kartu rovnou "chytí". Dotyk: dokud prst drží kartu
+// bez pohybu (~350 ms), nic se neděje a jde normálně scrollovat; pohyb dřív
+// scroll spustí (ručně, protože touch-action:none na kartě jinak scroll úplně
+// zablokuje) a dlouhý stisk kartu "chytí" za prst přesně jako na tabletu.
+const DLOUHY_STISK_MS = 350;
 let _pretDrag = null;
 
 function pretazeniZahaj(e, cislo) {
-  if (e.pointerType !== 'mouse' || e.button !== 0) return;
-  if (e.target.closest('select')) return;
-  e.preventDefault();
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
   const el = e.currentTarget;
   const r = el.getBoundingClientRect();
+  const sloupecKarty = el.closest('.sloupec-karty');
+  const tabule = el.closest('.tabule');
   _pretDrag = {
-    cislo, el, nad: null, aktivni: false, ghost: null,
+    cislo, el, nad: null, aktivni: false, ghost: null, timer: null, scrollLocked: false,
+    pointerType: e.pointerType,
     startX: e.clientX, startY: e.clientY,
     offsetX: e.clientX - r.left, offsetY: e.clientY - r.top, sirka: r.width,
+    sloupecKarty, sloupecScrollStart: sloupecKarty ? sloupecKarty.scrollTop : 0,
+    tabule, tabuleScrollStart: tabule ? tabule.scrollLeft : 0,
   };
-  el.setPointerCapture(e.pointerId);
-  el.addEventListener('pointermove', pretazeniPohyb);
-  el.addEventListener('pointerup', pretazeniKonec);
-  el.addEventListener('pointercancel', pretazeniKonec);
+  // setPointerCapture umí selhat (typicky jen automatizované testy, ne živý
+  // dotyk/myš) — poslech na document místo na kartě proto funguje spolehlivě
+  // i bez něj, když se ukazatel při rychlém tahu na okamžik dostane mimo kartu.
+  try { el.setPointerCapture(e.pointerId); } catch { /* nevadí, viz výše */ }
+  document.addEventListener('pointermove', pretazeniPohyb);
+  document.addEventListener('pointerup', pretazeniKonec);
+  document.addEventListener('pointercancel', pretazeniKonec);
+  if (e.pointerType === 'mouse') e.preventDefault();
+  else _pretDrag.timer = setTimeout(pretazeniAktivuj, DLOUHY_STISK_MS);
+}
+
+function pretazeniAktivuj() {
+  const d = _pretDrag;
+  if (!d || d.aktivni) return;
+  d.aktivni = true;
+  if (d.timer) { clearTimeout(d.timer); d.timer = null; }
+  S.drag = d.cislo;
+  d.el.classList.add('tazena');
+  document.body.style.cursor = 'grabbing';
+  const ghost = d.el.cloneNode(true);
+  ghost.className = 'card karta karta-duch';
+  ghost.style.width = d.sirka + 'px';
+  ghost.style.transform = 'translate(' + Math.round(d.startX - d.offsetX) + 'px,' + Math.round(d.startY - d.offsetY) + 'px)';
+  document.body.appendChild(ghost);
+  d.ghost = ghost;
 }
 
 function pretazeniPohyb(e) {
   const d = _pretDrag;
   if (!d) return;
+  const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+
   if (!d.aktivni) {
-    if (Math.abs(e.clientX - d.startX) < 5 && Math.abs(e.clientY - d.startY) < 5) return;
-    d.aktivni = true;
-    S.drag = d.cislo;
-    d.el.classList.add('tazena');
-    document.body.style.cursor = 'grabbing';
-    const ghost = d.el.cloneNode(true);
-    ghost.className = 'card karta karta-duch';
-    ghost.style.width = d.sirka + 'px';
-    document.body.appendChild(ghost);
-    d.ghost = ghost;
+    if (d.pointerType === 'mouse') {
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      pretazeniAktivuj();
+    } else {
+      // dotyk před "chycením": buď ještě čekáme na dlouhý stisk (malé chvění
+      // prstu nevadí), nebo se pohyb už vyhodnotil jako scroll a jen ho vedeme
+      if (!d.scrollLocked && Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (!d.scrollLocked) { d.scrollLocked = true; if (d.timer) { clearTimeout(d.timer); d.timer = null; } }
+      if (Math.abs(dy) >= Math.abs(dx)) { if (d.sloupecKarty) d.sloupecKarty.scrollTop = d.sloupecScrollStart - dy; }
+      else if (d.tabule) d.tabule.scrollLeft = d.tabuleScrollStart - dx;
+      return;
+    }
   }
+
+  e.preventDefault();
   d.ghost.style.transform = 'translate(' + Math.round(e.clientX - d.offsetX) + 'px,' + Math.round(e.clientY - d.offsetY) + 'px)';
   _dragX = e.clientX; _dragY = e.clientY;
   spustAutoScroll(); spustPageAutoScroll();
@@ -681,9 +713,10 @@ function pretazeniPohyb(e) {
 function pretazeniKonec(e) {
   const d = _pretDrag;
   if (!d) return;
-  d.el.removeEventListener('pointermove', pretazeniPohyb);
-  d.el.removeEventListener('pointerup', pretazeniKonec);
-  d.el.removeEventListener('pointercancel', pretazeniKonec);
+  if (d.timer) clearTimeout(d.timer);
+  document.removeEventListener('pointermove', pretazeniPohyb);
+  document.removeEventListener('pointerup', pretazeniKonec);
+  document.removeEventListener('pointercancel', pretazeniKonec);
   zastavAutoScroll(); zastavPageAutoScroll();
   document.body.style.cursor = '';
   _pretDrag = null;
@@ -691,7 +724,9 @@ function pretazeniKonec(e) {
   if (d.ghost) d.ghost.remove();
   const cislo = d.cislo, cilKarta = d.nad, cilKlic = S.dragOver, bylAktivni = d.aktivni;
   S.drag = null; S.dragOver = null;
-  if (!bylAktivni) { d.el.focus(); otevri(cislo); return; }
+  // klik (bez tažení) na dotyku pustí normální click → otevri() z onclick na kartě;
+  // na myši preventDefault() na začátku click potlačí, proto tu otevri() zavoláme sami
+  if (!bylAktivni) { if (d.pointerType === 'mouse') { d.el.focus(); otevri(cislo); } return; }
   const zdroj = S.zakazky.find(x => x.cislo === cislo);
   const cil = cilKarta ? S.zakazky.find(x => x.cislo === cilKarta) : null;
   // pustit na kartu ve stejném sloupci = ruční pořadí, jinak přesun do sloupce cíle
@@ -702,20 +737,22 @@ function pretazeniKonec(e) {
 }
 
 /* ---------- posun tabule myší po prázdné ploše ---------- */
-// Na dotyku se tabule přirozeně posouvá tažením prstu; s myší k tomu není
-// žádné gesto, jen kolečko. Tak jde tabuli "chytit" za prázdné místo (mimo
-// kartu a ovládací prvky) a přetáhnout do stran úplně stejně jako na tabletu.
+// Na dotyku se tabule přirozeně posouvá tažením prstu (nativní scroll, beze
+// změny). S myší k tomu není žádné gesto, jen kolečko — jde ji ale i s myší
+// "chytit" za prázdné místo (mimo kartu a ovládací prvky) a přetáhnout do
+// stran stejně jako swipe na tabletu.
 let _panDrag = null;
 
 function panZahaj(e) {
   if (e.pointerType !== 'mouse' || e.button !== 0) return;
   if (e.target.closest('.karta, button, select, input, a')) return;
+  e.preventDefault();
   const el = e.currentTarget;
   _panDrag = { el, startX: e.clientX, scrollStart: el.scrollLeft };
-  el.setPointerCapture(e.pointerId);
-  el.addEventListener('pointermove', panPohyb);
-  el.addEventListener('pointerup', panKonec);
-  el.addEventListener('pointercancel', panKonec);
+  try { el.setPointerCapture(e.pointerId); } catch { /* viz pretazeniZahaj výše */ }
+  document.addEventListener('pointermove', panPohyb);
+  document.addEventListener('pointerup', panKonec);
+  document.addEventListener('pointercancel', panKonec);
 }
 
 function panPohyb(e) {
@@ -728,9 +765,9 @@ function panPohyb(e) {
 function panKonec(e) {
   const p = _panDrag;
   if (!p) return;
-  p.el.removeEventListener('pointermove', panPohyb);
-  p.el.removeEventListener('pointerup', panKonec);
-  p.el.removeEventListener('pointercancel', panKonec);
+  document.removeEventListener('pointermove', panPohyb);
+  document.removeEventListener('pointerup', panKonec);
+  document.removeEventListener('pointercancel', panKonec);
   p.el.classList.remove('tabule-tazena');
   _panDrag = null;
 }
@@ -800,15 +837,6 @@ function sloupec(c, filtrovane) {
       class: 'sloupec' + (S.dragOver === c.klic ? ' nad' : ''),
       'data-klic': c.klic,
       style: 'width:' + sirka,
-      ondragover: e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-        if (S.dragOver !== c.klic) { S.dragOver = c.klic; oznacSloupce(); } },
-      ondragenter: e => { e.preventDefault();
-        if (S.dragOver !== c.klic) { S.dragOver = c.klic; oznacSloupce(); } },
-      ondragleave: e => { if (e.currentTarget.contains(e.relatedTarget)) return;
-        if (S.dragOver === c.klic) { S.dragOver = null; oznacSloupce(); } },
-      ondrop: e => { e.preventDefault(); const src = S.drag;
-        S.drag = null; S.dragOver = null;
-        if (src) presun(src, c.klic); else prekresliTabuli(); },
     },
     h('div', { class: 'sloupec-hlavicka' },
       h('h4', {}, c.nazev),
@@ -854,25 +882,12 @@ function karta(z) {
 
   return h('article', {
       class: 'card karta' + (S.drag === z.cislo ? ' tazena' : '') + (S.sel === z.cislo ? ' vybrana' : ''),
-      style: 'cursor:' + (muzeMenit() ? 'grab' : 'pointer') + ';border-left-color:' + p.bg,
+      style: 'cursor:' + (muzeMenit() ? 'grab' : 'pointer') + ';border-left-color:' + p.bg
+        + (muzeMenit() ? ';touch-action:none' : ''),
       tabindex: '0',
       'data-cislo': z.cislo,
       onpointerdown: muzeMenit() ? (e => pretazeniZahaj(e, z.cislo)) : null,
-      draggable: muzeMenit() ? 'true' : 'false',
-      ondragstart: e => { if (!muzeMenit()) { e.preventDefault(); return; }
-        e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', z.cislo);
-        S.drag = z.cislo; },
-      ondragend: () => { S.drag = null; S.dragOver = null; prekresliTabuli(); },
-      ondragover: e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
-      ondrop: e => {
-        e.preventDefault(); e.stopPropagation();
-        const src = S.drag; S.drag = null; S.dragOver = null;
-        if (!src || src === z.cislo) { prekresliTabuli(); return; }
-        const od = S.zakazky.find(x => x.cislo === src);
-        // pustit na kartu ve stejném sloupci = ruční pořadí, jinak přesun
-        if (od && od.stav === z.stav) zmenPoradi(src, z.cislo); else presun(src, z.stav);
-      },
-      onclick: e => { if (e.target.tagName !== 'SELECT') otevri(z.cislo); },
+      onclick: () => otevri(z.cislo),
       onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); otevri(z.cislo); } },
     },
     h('div', { class: 'telo' },
