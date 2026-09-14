@@ -1,10 +1,10 @@
 # Co ještě dokončit — Zakázky Cadmia3D
 
-Aktualizováno: 13. 9. 2026
+Aktualizováno: 14. 9. 2026
 
 ## Priorita 1 — ověřit v běžném provozu
 
-- [x] Projít na notebooku nové pohledy **Dnes** a **Výroba** — vypadají a fungují správně. Na tabletu ještě neověřeno (potřeba fyzické zařízení).
+- [x] Projít na notebooku nové pohledy **Dnes** a **Výroba** — vypadají a fungují správně. Tabletová šířka (834×1112) ověřena přes emulaci v prohlížeči; na skutečném fyzickém tabletu ještě neprojeto.
 - [x] Ověřit celý tok: otevřít zakázku → **Plánovat výrobu** → vytvořit úlohu → zahájit tisk → dokončit → expedice — projeto na testovací zakázce P-2026-0034 (přesunuto do Odloženo/Zrušeno po ověření), včetně automatického posunu sloupce (Přijato → Fronta → Tiskne se → Postprocess) a ručního přepnutí na Expedice.
   - [x] **Opraveno:** „Automatický návrh pro vše“ ignoroval filtr/hledání a navrhl úlohy pro úplně všechny nepřiřazené kusy ze všech zakázek najednou — při aktivním hledání/filtru teď návrh (i tlačítko samo, popisek „pro vyfiltrované“) zahrne jen to, co je vidět. Ověřeno v produkci.
   - **Zjištěno, neopraveno:** hláška „Nespárovaná tiskárna (chybí v registru): Bambu Lab“ — v datech je typ tiskárny „Bambu Lab“ (s mezerou), který neodpovídá žádnému registrovanému typu (Bambulab H2D/X1C). Je to nejspíš z importu z kalkulátoru s jiným zápisem názvu; nejde bezpečně domapovat automaticky (dvě možné cílové tiskárny), chce to dohledat zdroj v kalkulátoru nebo v datech zakázky.
@@ -16,9 +16,10 @@ Aktualizováno: 13. 9. 2026
 - [x] Sjednotit všechny vyskakovací dialogy a chyby do jednoho stylu appky — nahrazeny nativní `prompt()`/`confirm()` (nová zakázka, sloupec, stroj, heslo, nový uživatel, mazání) jedním sdíleným dialogovým oknem (kicker + teal nadpis, stejné ovládání/zavírání jako zbytek appky). Nativní dialogy navíc na dotyku vadily a v automatizaci/některých prohlížečích uměly zamrazit stránku.
 - [x] Zkrátit běžnou kartu na tabuli — zůstal zákazník, termín, cena, materiál/technologie a jeden problémový štítek; seznam rozpracovaných souborů a průběh tisku (%) jsou pryč z karty (zůstávají v detailu a v přehledu Výroby). Nasazeno a ověřeno.
 - [x] Doplnit do „Dnes“ přímé filtry/akce pro jednotlivé skupiny — každá skupina (Hoří/Čeká na reakci/Ve výrobě) má tlačítko „Zobrazit na tabuli“, které otevře tabuli přefiltrovanou přesně na tu skupinu (jde na ní přetahovat karty a dělat hromadné akce). Nasazeno a ověřeno. Mimoto opravena barva technologie na kartě pro položky s jinou velikostí písmen (např. „Resin“ z kalkulátoru vs. „RESIN“ v registru tiskáren).
-- [x] Upravovat rozložení pro tablet — opraveno, že tlačítka jako „Zahájit tisk“/„Dokončeno“ ve Výrobě měla vlastní malý padding přímo v kódu, který přebil zvětšení pro dotyk (teď mají min-height/min-width 44 px jako podlahu bez ohledu na to). Plánování výroby (dvousloupcová mřížka) se na šířce ≤900 px zlomí pod sebe. Změna stavu bez drag-and-dropu (`.karta-stav` dropdown na kartě) už existovala a funguje. Nasazeno; **vizuální ověření na reálném tabletu/šířce obrazovky ještě chybí** — prohlížeč (Claude in Chrome) byl při práci nedostupný.
+- [x] Upravovat rozložení pro tablet — opraveno, že tlačítka jako „Zahájit tisk“/„Dokončeno“ ve Výrobě měla vlastní malý padding přímo v kódu, který přebil zvětšení pro dotyk (teď mají min-height/min-width 44 px jako podlahu bez ohledu na to). Plánování výroby (dvousloupcová mřížka) se na šířce ≤900 px zlomí pod sebe. Vizuálně ověřeno na 834×1112 (iframe test) — vše sedí (44px tlačítka, plán na plnou šířku, „Odpovědět“ skáče na textarea).
+- [x] Změna stavu bez drag-and-dropu — dropdown na kartě (`.karta-stav`) fungoval jen na dotyku, podle zpětné vazby („na tabletu se to ovládá mnohem líp“) je teď vidět natrvalo i v desktop režimu s myší; přetažení zůstává funkční vedle toho. Nasazeno a ověřeno.
 - [ ] **Zjištěno při ladění barev:** filtr technologie na tabuli (`Kdokoli/Všechny technologie/…`) nabízí „SLA“, ale položky z kalkulátoru mají technologii uloženou jako „Resin“ — filtr na SLA/RESIN tak nikdy nic nenajde. Sjednotit název (buď filtr přejmenovat na „Resin“, nebo zjistit u kalkulátoru, proč neposílá „SLA“).
-- [x] V detailu vyhodnotit další rychlé akce — přiřazení a změna stavu už byly hned nahoře v detailu; přibylo tlačítko „Odpovědět“ vedle „Plánovat výrobu“, které skočí a zaostří rovnou na odpověď zákazníkovi místo scrollování přes ceník/přílohy/historii. Nasazeno, čeká na vizuální ověření (viz výše).
+- [x] V detailu vyhodnotit další rychlé akce — přiřazení a změna stavu už byly hned nahoře v detailu; přibylo tlačítko „Odpovědět“ vedle „Plánovat výrobu“, které skočí a zaostří rovnou na odpověď zákazníkovi místo scrollování přes ceník/přílohy/historii. Nasazeno a ověřeno.
 
 ## Priorita 3 — provoz a bezpečnost
 
