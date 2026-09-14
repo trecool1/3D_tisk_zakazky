@@ -634,6 +634,11 @@ document.addEventListener('drop', zastavPageAutoScroll);
 // pohybu kartu "chytí" za kurzor/prst přesně jako na tabletu.
 const DLOUHY_STISK_MS = 350;
 let _pretDrag = null;
+// preventDefault() na pointerdown nespolehlivě potlačuje navazující click ve
+// všech prohlížečích (u myši to umí "prokouknout") — po posunu/tažení proto
+// klik na kartu sami na jeden příští pokus zablokujeme, ať se po scrollu
+// needotevře detail (a s ním celé překreslení, které by scroll shodilo zpět).
+let _blokovatKlik = false;
 
 function pretazeniZahaj(e, cislo) {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -720,8 +725,13 @@ function pretazeniKonec(e) {
   if (d.ghost) d.ghost.remove();
   const cislo = d.cislo, cilKarta = d.nad, cilKlic = S.dragOver, bylAktivni = d.aktivni;
   S.drag = null; S.dragOver = null;
-  // preventDefault() na začátku potlačí nativní click (myš i dotyk) — čistý
-  // klik/ťuknutí bez pohybu proto otevřeme sami; když šlo o posun (scrollLocked),
+  // preventDefault() na pointerdown nespolehlivě potlačí navazující click ve
+  // všech prohlížečích (u myši to umí "prokouknout") — o to, co klik znamená,
+  // se stará výhradně tenhle kód; kdyby click přesto přišel, zablokujeme ho
+  // (jednorázově, s pojistkou timeoutem, kdyby náhodou nepřišel vůbec).
+  _blokovatKlik = true;
+  setTimeout(() => { _blokovatKlik = false; }, 300);
+  // čistý klik/ťuknutí bez pohybu otevřeme sami; když šlo o posun (scrollLocked),
   // otevírat nic nemá, to už jen doscrolloval
   if (!bylAktivni) { if (!d.scrollLocked) { d.el.focus(); otevri(cislo); } return; }
   const zdroj = S.zakazky.find(x => x.cislo === cislo);
@@ -890,7 +900,7 @@ function karta(z) {
       tabindex: '0',
       'data-cislo': z.cislo,
       onpointerdown: muzeMenit() ? (e => pretazeniZahaj(e, z.cislo)) : null,
-      onclick: () => otevri(z.cislo),
+      onclick: () => { if (_blokovatKlik) { _blokovatKlik = false; return; } otevri(z.cislo); },
       onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); otevri(z.cislo); } },
     },
     h('div', { class: 'telo' },
