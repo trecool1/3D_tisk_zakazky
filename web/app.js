@@ -701,9 +701,44 @@ function pretazeniKonec(e) {
   else prekresliTabuli();
 }
 
-// Kontejner tabule i s vodorovným rolováním: kolečkem myši a u kraje při přetahování.
+/* ---------- posun tabule myší po prázdné ploše ---------- */
+// Na dotyku se tabule přirozeně posouvá tažením prstu; s myší k tomu není
+// žádné gesto, jen kolečko. Tak jde tabuli "chytit" za prázdné místo (mimo
+// kartu a ovládací prvky) a přetáhnout do stran úplně stejně jako na tabletu.
+let _panDrag = null;
+
+function panZahaj(e) {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return;
+  if (e.target.closest('.karta, button, select, input, a')) return;
+  const el = e.currentTarget;
+  _panDrag = { el, startX: e.clientX, scrollStart: el.scrollLeft };
+  el.setPointerCapture(e.pointerId);
+  el.addEventListener('pointermove', panPohyb);
+  el.addEventListener('pointerup', panKonec);
+  el.addEventListener('pointercancel', panKonec);
+}
+
+function panPohyb(e) {
+  const p = _panDrag;
+  if (!p) return;
+  p.el.classList.add('tabule-tazena');
+  p.el.scrollLeft = p.scrollStart - (e.clientX - p.startX);
+}
+
+function panKonec(e) {
+  const p = _panDrag;
+  if (!p) return;
+  p.el.removeEventListener('pointermove', panPohyb);
+  p.el.removeEventListener('pointerup', panKonec);
+  p.el.removeEventListener('pointercancel', panKonec);
+  p.el.classList.remove('tabule-tazena');
+  _panDrag = null;
+}
+
+// Kontejner tabule i s vodorovným rolováním: kolečkem myši, tažením za prázdnou
+// plochu a u kraje při přetahování karty.
 function tabuleEl(filtrovane) {
-  const el = h('div', { class: 'tabule', id: 'tabule' },
+  const el = h('div', { class: 'tabule', id: 'tabule', onpointerdown: panZahaj },
     h('div', { class: 'sloupce' }, viditelneSloupce().map(c => sloupec(c, filtrovane))));
 
   // Kolečko: když je kurzor nad dlouhým sloupcem, roluje se sloupec svisle;
@@ -865,12 +900,7 @@ function karta(z) {
         h('span', { class: 'ini', style: 'background:' + (z.prirazeno ? 'var(--teal-100)' : 'transparent')
           + ';color:' + (z.prirazeno ? 'var(--teal-700)' : 'var(--muted)') }, ini(jmenoKlice(z.prirazeno)))),
 
-      znacka && h('div', { class: 'znacka', style: 'background:' + znacka[1] + ';color:' + znacka[2] }, znacka[0]),
-
-      // na tabletu a telefonu se stav mění dropdownem, ne přetažením
-      muzeMenit() && h('select', { class: 'input karta-stav', onclick: e => e.stopPropagation(),
-          onchange: e => presun(z.cislo, e.target.value) },
-        S.sloupce.map(c => h('option', { value: c.klic, selected: c.klic === z.stav }, c.nazev)))));
+      znacka && h('div', { class: 'znacka', style: 'background:' + znacka[1] + ';color:' + znacka[2] }, znacka[0])));
 }
 
 /* ---------- akce nad kartou ---------- */
