@@ -270,7 +270,7 @@ function nazevSloupce(k) { const s = S.sloupce.find(x => x.klic === k); return s
 // Stejné skupiny jako v přehledu „Dnes" — sdílené, ať „Zobrazit na tabuli"
 // z jedné skupiny ukáže přesně to, co bylo v jejím seznamu.
 const RYCHLE_FILTRY = {
-  hori:   z => !UZAVRENO.includes(z.stav) && z.dnuDoTerminu <= 0,
+  hori:   z => !UZAVRENO.includes(z.stav) && z.dnuDoTerminu < 2,
   ceka:   z => !UZAVRENO.includes(z.stav) && (z.neprectene || z.schvalilZakaznik || z.modelyChybi),
   vyroba: z => !UZAVRENO.includes(z.stav) && ['fronta', 'tiskne', 'postprocess', 'expedice'].includes(z.stav),
 };
@@ -506,7 +506,7 @@ function obrazovkaDnes() {
         muzeMenit() && h('button', { class: 'btn btn-primary', onclick: () => otevriVyrobu('planovani') }, 'Plánovat výrobu'),
         h('button', { class: 'btn btn-secondary', onclick: () => prepniPohled('board') }, 'Otevřít tabuli'))),
     h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4);align-items:start' },
-      sekceDnes('hori', 'Hoří', 'Zakázky s termínem dnes nebo po termínu.', horici, 'Nic není po termínu ani na dnešek.'),
+      sekceDnes('hori', 'Hoří', 'Zakázky, kterým zbývá méně než 2 dny, nebo jsou po termínu.', horici, 'Nic nehoří — všude zbývá aspoň 2 dny.'),
       sekceDnes('ceka', 'Čeká na reakci', 'Nepřečtená odpověď, schválení nebo chybějící model.', cekaji, 'Žádný blokátor nečeká na vyřízení.'),
       sekceDnes('vyroba', 'Ve výrobě', 'Fronta tisku, tisk, dokončení a expedice.', vyroba, 'Ve výrobě teď není žádná otevřená zakázka.')));
 }
