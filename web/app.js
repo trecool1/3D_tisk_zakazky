@@ -825,9 +825,22 @@ function prekresliTabuli() {
   const stary = $('#tabule');
   if (!stary) { vykresli(); return; }
   const posun = stary.scrollLeft;
+  // svislé odrolení každého sloupce zvlášť — jinak by ho i tohle dílčí
+  // překreslení (např. po přesunu karty) shodilo zpátky na začátek
+  const posunSloupcu = {};
+  stary.querySelectorAll('.sloupec').forEach(s => {
+    const karty = s.querySelector('.sloupec-karty');
+    if (karty && karty.scrollTop) posunSloupcu[s.dataset.klic] = karty.scrollTop;
+  });
   const novy = tabuleEl(S.zakazky.filter(projde));
   stary.replaceWith(novy);
   novy.scrollLeft = posun;            // až po vložení do DOM, jinak se ořízne na 0
+  novy.querySelectorAll('.sloupec').forEach(s => {
+    const v = posunSloupcu[s.dataset.klic];
+    if (!v) return;
+    const karty = s.querySelector('.sloupec-karty');
+    if (karty) karty.scrollTop = v;
+  });
   const pruh = document.querySelector('.pruh-filtru');
   if (maFiltry() !== !!pruh) vykresli();
 }
@@ -2402,6 +2415,15 @@ function obrazovkaNahled() {
 function vykresli() {
   const korenPuvodni = $('#app');
   const posunTabule = korenPuvodni ? (korenPuvodni.querySelector('#tabule') || {}).scrollLeft : 0;
+  // svislé odrolení každého sloupce zvlášť (klik na kartu dole v dlouhém
+  // sloupci jinak po překreslení detailu shodil scroll zpátky na začátek)
+  const posunSloupcu = {};
+  if (korenPuvodni) {
+    korenPuvodni.querySelectorAll('.sloupec').forEach(s => {
+      const karty = s.querySelector('.sloupec-karty');
+      if (karty && karty.scrollTop) posunSloupcu[s.dataset.klic] = karty.scrollTop;
+    });
+  }
   // detail se překresluje celý — udrž jeho svislé odrolování (jinak po každé změně skočí nahoru)
   const posunDetail = korenPuvodni ? (korenPuvodni.querySelector('.detail') || {}).scrollTop : 0;
   // udrž fokus (a kurzor) v poli, když překreslení přijde uprostřed psaní — např. hledání
@@ -2444,6 +2466,12 @@ function vykresli() {
   if (korenPuvodni) korenPuvodni.replaceWith(novy); else document.body.append(novy);
   const tab = novy.querySelector('#tabule');
   if (tab && posunTabule) tab.scrollLeft = posunTabule;
+  novy.querySelectorAll('.sloupec').forEach(s => {
+    const v = posunSloupcu[s.dataset.klic];
+    if (!v) return;
+    const karty = s.querySelector('.sloupec-karty');
+    if (karty) karty.scrollTop = v;
+  });
   const det = novy.querySelector('.detail');
   if (det && posunDetail) det.scrollTop = posunDetail;
   if (fokus) {
