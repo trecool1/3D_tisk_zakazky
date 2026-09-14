@@ -625,6 +625,82 @@ document.addEventListener('dragover', e => {
 document.addEventListener('dragend', zastavPageAutoScroll);
 document.addEventListener('drop', zastavPageAutoScroll);
 
+/* ---------- přetažení karty myší ---------- */
+// Nativní HTML5 drag-and-drop se s myší chová hůř než na dotyku — poloprůhledný
+// "duch" karty, co nesleduje kurzor přesně a znatelně za ním zaostává. Pro myš
+// proto kartu vedeme vlastní logikou přesně pod ukazatelem; na dotyku (tablet,
+// telefon) native DnD funguje dobře, tam necháváme beze změny — pretazeniZahaj
+// se pro jiný než "mouse" pointer vůbec nespustí, takže draggable/ondrag* na
+// kartě (viz karta() níže) zůstává pro dotyk plně funkční vedle tohohle.
+let _pretDrag = null;
+
+function pretazeniZahaj(e, cislo) {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return;
+  if (e.target.closest('select')) return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  _pretDrag = {
+    cislo, el, nad: null, aktivni: false, ghost: null,
+    startX: e.clientX, startY: e.clientY,
+    offsetX: e.clientX - r.left, offsetY: e.clientY - r.top, sirka: r.width,
+  };
+  el.setPointerCapture(e.pointerId);
+  el.addEventListener('pointermove', pretazeniPohyb);
+  el.addEventListener('pointerup', pretazeniKonec);
+  el.addEventListener('pointercancel', pretazeniKonec);
+}
+
+function pretazeniPohyb(e) {
+  const d = _pretDrag;
+  if (!d) return;
+  if (!d.aktivni) {
+    if (Math.abs(e.clientX - d.startX) < 5 && Math.abs(e.clientY - d.startY) < 5) return;
+    d.aktivni = true;
+    S.drag = d.cislo;
+    d.el.classList.add('tazena');
+    document.body.style.cursor = 'grabbing';
+    const ghost = d.el.cloneNode(true);
+    ghost.className = 'card karta karta-duch';
+    ghost.style.width = d.sirka + 'px';
+    document.body.appendChild(ghost);
+    d.ghost = ghost;
+  }
+  d.ghost.style.transform = 'translate(' + Math.round(e.clientX - d.offsetX) + 'px,' + Math.round(e.clientY - d.offsetY) + 'px)';
+  _dragX = e.clientX; _dragY = e.clientY;
+  spustAutoScroll(); spustPageAutoScroll();
+
+  const pod = document.elementFromPoint(e.clientX, e.clientY);
+  const sloupecEl = pod && pod.closest('.sloupec');
+  const klic = sloupecEl ? sloupecEl.dataset.klic : null;
+  if (klic !== S.dragOver) { S.dragOver = klic; oznacSloupce(); }
+  const kartaPod = pod && pod.closest('.karta');
+  d.nad = (kartaPod && kartaPod.dataset.cislo !== d.cislo) ? kartaPod.dataset.cislo : null;
+}
+
+function pretazeniKonec(e) {
+  const d = _pretDrag;
+  if (!d) return;
+  d.el.removeEventListener('pointermove', pretazeniPohyb);
+  d.el.removeEventListener('pointerup', pretazeniKonec);
+  d.el.removeEventListener('pointercancel', pretazeniKonec);
+  zastavAutoScroll(); zastavPageAutoScroll();
+  document.body.style.cursor = '';
+  _pretDrag = null;
+  d.el.classList.remove('tazena');
+  if (d.ghost) d.ghost.remove();
+  const cislo = d.cislo, cilKarta = d.nad, cilKlic = S.dragOver, bylAktivni = d.aktivni;
+  S.drag = null; S.dragOver = null;
+  if (!bylAktivni) { d.el.focus(); otevri(cislo); return; }
+  const zdroj = S.zakazky.find(x => x.cislo === cislo);
+  const cil = cilKarta ? S.zakazky.find(x => x.cislo === cilKarta) : null;
+  // pustit na kartu ve stejném sloupci = ruční pořadí, jinak přesun do sloupce cíle
+  if (cil && zdroj && zdroj.stav === cil.stav) zmenPoradi(cislo, cilKarta);
+  else if (cil) presun(cislo, cil.stav);
+  else if (cilKlic) presun(cislo, cilKlic);
+  else prekresliTabuli();
+}
+
 // Kontejner tabule i s vodorovným rolováním: kolečkem myši a u kraje při přetahování.
 function tabuleEl(filtrovane) {
   const el = h('div', { class: 'tabule', id: 'tabule' },
@@ -745,6 +821,8 @@ function karta(z) {
       class: 'card karta' + (S.drag === z.cislo ? ' tazena' : '') + (S.sel === z.cislo ? ' vybrana' : ''),
       style: 'cursor:' + (muzeMenit() ? 'grab' : 'pointer') + ';border-left-color:' + p.bg,
       tabindex: '0',
+      'data-cislo': z.cislo,
+      onpointerdown: muzeMenit() ? (e => pretazeniZahaj(e, z.cislo)) : null,
       draggable: muzeMenit() ? 'true' : 'false',
       ondragstart: e => { if (!muzeMenit()) { e.preventDefault(); return; }
         e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', z.cislo);

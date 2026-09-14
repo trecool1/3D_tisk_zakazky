@@ -166,6 +166,10 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
 .karta .znacka { font-size: 14px; padding: 3px 7px; }
 .karta.tazena { opacity: .4; }
 .karta.vybrana { outline: 2px solid var(--teal); outline-offset: 1px; }
+/* Vlastní přetažení myší (viz pretazeniZahaj v app.js) — kopie karty, co jede
+   přesně pod kurzorem, na rozdíl od nativního HTML5 DnD ducha se zpožděním. */
+.karta-duch { position: fixed; top: 0; left: 0; z-index: 60; pointer-events: none;
+  box-shadow: var(--shadow-lg); opacity: .95; }
 
 /* ---------- detail ---------- */
 
