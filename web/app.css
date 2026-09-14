@@ -211,11 +211,21 @@ nav.navigace button.aktivni { color: var(--ink); border-bottom-color: var(--teal
 /* Na tabletu u tiskárny se stav mění dropdownem a hit targety mají aspoň 44 px. */
 
 .karta-stav { display: none; }
+/* Plánování výroby: nepřiřazené díly vlevo, navržené úlohy a stroje vpravo —
+   na tabletu na výšku (≤900px) pod sebe, ať se s díly na úzkém sloupci nemusí
+   pracovat s drobným přetahováním. */
+.plan-grid { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: var(--space-6); }
+@media (max-width: 900px) {
+  .plan-grid { grid-template-columns: 1fr; }
+}
 @media (pointer: coarse), (max-width: 900px) {
   .karta-stav { display: block; width: 100%; min-height: 44px; padding: 8px; margin-top: 4px; }
   .karta .telo { padding: var(--space-3); gap: 8px; }
-  .btn { padding: 11px 16px; min-height: 44px; }
-  .prepinac { min-height: 44px; }
+  /* min-height/min-width jsou podlaha, kterou inline padding (časté u malých
+     tlačítek jako "Zahájit tisk"/"Dokončeno" v přehledu Výroby) nepřebije —
+     na rozdíl od padding to nejde nastavit v atributu style jednotlivého tlačítka. */
+  .btn { padding: 11px 16px; min-height: 44px; min-width: 44px; }
+  .prepinac { min-height: 44px; min-width: 44px; }
   nav.navigace button { padding: 10px 0; }
   .input { min-height: 40px; }
 }

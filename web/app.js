@@ -885,6 +885,13 @@ function detailPanel() {
         h('h2', { style: 'margin:0' }, z.zakaznik),
         muzeMenit() && h('button', { class: 'btn btn-secondary', style: 'padding:4px 9px',
           onclick: async () => { S.open = null; S.detail = null; await otevriVyrobu('planovani', z.cislo); } }, 'Plánovat výrobu'),
+        // Rychlá akce: skoč rovnou na odpověď, ať se nemusí scrollovat přes
+        // ceník, přílohy a historii až ke konverzaci dole v detailu.
+        muzeMenit() && h('button', { class: 'btn btn-secondary', style: 'padding:4px 9px',
+          onclick: () => {
+            S.rezim = 'odpoved'; vykresli();
+            setTimeout(() => { const el = $('#draft'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } }, 0);
+          } }, 'Odpovědět'),
         muzeMenit() && h('div', { style: 'display:inline-flex;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--line)',
             title: 'Sledování výroby: „Automat" znamená, že sloupec na tabuli hlídá appka podle stavu tiskových úloh. „Ruční" znamená, že se sloupec sám nemění (typicky po ručním přetažení karty).' },
           h('button', { class: 'prepinac' + (z.stavAuto ? ' zap teal' : ''), style: 'border:0;border-radius:0',
@@ -1702,7 +1709,7 @@ function planovaniScreen() {
       h('button', { class: 'btn btn-secondary', style: 'padding:3px 10px', onclick: () => {
         S.planZakazka = null; S.planHledani = ''; vykresli();
       } }, 'Zobrazit celou frontu')),
-    h('div', { style: 'display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:var(--space-6)' },
+    h('div', { class: 'plan-grid' },
       h('div', { style: 'min-width:0' },
         h('h3', { class: 'kicker' }, 'Nepřiřazené díly'),
         h('div', { style: 'display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-3)' },
